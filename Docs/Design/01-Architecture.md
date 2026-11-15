@@ -35,10 +35,11 @@ transport.
 | --- | --- | --- |
 | `packages/shared` | formats des messages ; réglages communs (tick, nombre de joueurs, longueur des noms, couleurs) | rien |
 | `packages/engine` | la partie : grille (cases données, cases remplies, propriétaire de chaque case), bonshommes (position, direction), fonction de déplacement `move`, remplissage, fin de partie | rien |
-| `packages/room` | salle d'attente (reprise de `Room` de Fronts of Iron, §7) et partie lancée : file des entrées ; `step()` applique les entrées, avance le moteur d'un tick et renvoie un snapshot par joueur. Crée la grille (`02-Grilles.md`, à écrire) et garde la solution | `shared`, `engine` |
+| `packages/room` | salle d'attente (reprise de `Room` de Fronts of Iron, §7) et partie lancée : file des entrées ; `step()` applique les entrées, avance le moteur d'un tick et renvoie un snapshot par joueur. Tire la grille du catalogue que lui passe l'enveloppe, la transforme (`02-Grilles.md`) et garde la solution | `shared`, `engine` |
+| `packages/catalog` | catalogue des grilles des parties en ligne, avec leurs solutions, écrit par le script de `02-Grilles.md` §1. **Jamais importé par le client** | rien |
 | `client/` | page : accueil, salle d'attente, grille en canvas 2D, clavier, prédiction de son bonhomme, interpolation des autres (§6) | `shared`, `engine` ; `room` en solo |
-| `worker/` | page, lobby, et enveloppe Durable Object d'une partie : WebSocket, `setInterval` du tick, inscription et signaux au lobby | `room`, `shared` |
-| `server/` | enveloppe Node : serveur WebSocket, `setInterval`, `cloudflared`, inscription et signaux au lobby (plus tard) | `room`, `shared` |
+| `worker/` | page, lobby, et enveloppe Durable Object d'une partie : WebSocket, `setInterval` du tick, inscription et signaux au lobby | `room`, `shared`, `catalog` |
+| `server/` | enveloppe Node : serveur WebSocket, `setInterval`, `cloudflared`, inscription et signaux au lobby (plus tard) | `room`, `shared`, `catalog` |
 
 Le client importe `packages/engine` pour une seule raison : la fonction `move`,
 qui déplace son propre bonhomme avant que l'hôte réponde (§3, Prédiction).
@@ -107,7 +108,7 @@ Identique à Fronts of Iron (son `01-Architecture.md` §2) :
   par tick, donc changer le tick change la vitesse des bonshommes. L'enveloppe
   appelle `step()` toutes les `TICK_MS` ; le moteur ne lit aucune horloge.
 - **Positions entières** : 1 case = 1 000 unités, grille de 9 000 × 9 000
-  (9 × 9 cases, provisoire, `00-Game.md` §3). Messages courts, et mêmes calculs
+  (9 × 9 cases, provisoire, `02-Grilles.md` §4). Messages courts, et mêmes calculs
   exacts chez l'hôte et chez le client.
 
 ### Ce que le client envoie : sa direction, pas sa position
@@ -301,14 +302,16 @@ copié puis adapté ; les deux dépôts évoluent ensuite séparément.
 Provisoire, à régler en jouant : tick, unités, vitesse, délai d'interpolation,
 répartition de la correction de prédiction, tolérance de remplissage.
 
-À décider avec l'auteur : les points ouverts de `00-Game.md` §3 ; la génération
-des grilles et les niveaux de difficulté (`02-Grilles.md`, étape 2).
+À décider avec l'auteur : les points ouverts de `00-Game.md` §3 et de
+`02-Grilles.md` §4 (niveaux de difficulté, taille du catalogue).
 
 État :
 
 1. **Fait (15 novembre 2026)** : dépôt, conventions (`CLAUDE.md`),
    `00-Game.md`, ce document. Aucun code.
-2. Étape 2 : génération des grilles et niveaux de difficulté.
+2. **En cours** : étape 2, les grilles (`02-Grilles.md`). Décidé le
+   15 novembre 2026 : catalogue pré-généré, transformé au lancement. Reste :
+   les niveaux.
 3. Étape 3 : première version (solo + Cloudflare). Avant son premier push sur
    `main` : l'auteur ajoute au dépôt GitHub les secrets `CLOUDFLARE_API_TOKEN`
    et `CLOUDFLARE_ACCOUNT_ID`, puis crée les secrets du Worker `LOBBY_SECRET` et
@@ -323,6 +326,8 @@ Pas de `deploy.yml` avant l'étape 3 : un push sur `main` lancerait
 - **Mettre la solution dans un message** (`start`, `state`, un événement) « pour
   afficher plus vite » : n'importe quel joueur la lit dans les outils du
   navigateur. Le client attend l'événement de l'hôte.
+- **Importer `packages/catalog` dans le client** : même fuite, pour toutes les
+  grilles des parties en ligne (`02-Grilles.md` §1 et §5).
 - **Envoyer une entrée à chaque image** (`requestAnimationFrame`, 60 par
   seconde) : chaque message reçu par le Durable Object est facturé ; le quota
   du jour tomberait à quelques parties. Un `input` ne part que quand les flèches

@@ -30,7 +30,9 @@ inventée.
 - `Docs/Design/00-Game.md` — ce que le jeu est, et ses points ouverts ;
 - `Docs/Design/01-Architecture.md` — réseau, lobby, hôte, moteur : ce qui est
   décidé, pourquoi, et ce qu'une modification bien intentionnée casserait sans
-  bruit.
+  bruit ;
+- `Docs/Design/02-Grilles.md` — grilles : catalogue pré-généré, transformé au
+  lancement, mesure de la difficulté ; fait foi pour ce domaine.
 
 ---
 
@@ -46,7 +48,9 @@ packages/
   shared/    formats des messages et réglages communs (tick, joueurs, noms, couleurs)
   engine/    la partie : grille, bonshommes, déplacement, remplissage, fin de partie
   room/      salle d'attente et partie côté hôte : entrées → moteur → snapshots ;
-             crée la grille et garde la solution
+             tire la grille du catalogue, la transforme, garde la solution
+  catalog/   grilles des parties en ligne et leurs solutions (02-Grilles.md) ;
+             jamais importé par client/
 client/      page du jeu (Vite + TypeScript) : accueil, salle d'attente, grille,
              prédiction de son bonhomme, interpolation des autres ; en solo,
              room + engine dans un Web Worker
@@ -110,7 +114,9 @@ Le client n'envoie que des entrées (direction, case et chiffre à remplir).
 L'hôte calcule les positions, accepte ou refuse les remplissages, et envoie le
 résultat. Un client ne décide jamais de sa position ni d'une case remplie.
 **La solution de la grille ne quitte jamais l'hôte** : elle n'entre dans aucun
-message.
+message, et `packages/catalog` (les grilles des parties en ligne) n'est jamais
+importé par `client/`, ni directement ni par un autre paquet : le code de la
+page est public.
 
 ### 4. L'hôte écrit l'expéditeur
 

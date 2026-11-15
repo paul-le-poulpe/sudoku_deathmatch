@@ -4,8 +4,10 @@ Point d'entrée des règles. Ne contient que ce que l'auteur a décidé ; le res
 est dans les points ouverts (§3). Une règle n'est écrite qu'à un seul endroit
 (`CLAUDE.md`).
 
-Documents thématiques : aucun pour l'instant. À venir : `02-Grilles.md`
-(génération des grilles et niveaux de difficulté, étape 2).
+Documents thématiques :
+- `02-Grilles.md` — d'où vient la grille d'une partie (catalogue pré-généré,
+  transformé au lancement) et comment sa difficulté est mesurée ; niveaux à
+  décider.
 
 ---
 
@@ -29,6 +31,10 @@ Une grille de Sudoku sur laquelle des bonshommes se déplacent et remplissent
 des cases. Modes : solo et partie hébergée par Cloudflare ; partie hébergée sur
 le PC d'un joueur plus tard (`01-Architecture.md` §1).
 
+Maquette jouable (15 novembre 2026) : artifact « Sudoku Deathmatch —
+maquette » (accueil, création, salle d'attente, partie). Les règles qu'elle
+applique sont provisoires et listées sur sa page ; elles ne font pas foi.
+
 ## 3. Points ouverts
 
 - **Choisir le chiffre** : comment le joueur indique le chiffre qu'il écrit.
@@ -38,8 +44,6 @@ le PC d'un joueur plus tard (`01-Architecture.md` §1).
 - **Vainqueur** : comment il est déterminé quand la grille est pleine.
 - **Cases données** (chiffres de départ) : traversables ou non.
 - **Collisions** entre bonshommes.
-- **Taille de la grille** : 9 × 9 supposé par `01-Architecture.md`
-  (provisoire) ; à trancher avec `02-Grilles.md`.
 - **Durée d'une partie** : 10 minutes supposées pour les estimations de
   quotas (`01-Architecture.md` §5, provisoire).
 - **Pause** : existe-t-elle, qui la commande.
