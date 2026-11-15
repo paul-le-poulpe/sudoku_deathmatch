@@ -37,7 +37,7 @@ transport.
 | `packages/engine` | la partie : grille (cases données, cases remplies, propriétaire de chaque case), bonshommes (position, direction), fonction de déplacement `move`, remplissage, fin de partie | rien |
 | `packages/room` | salle d'attente (reprise de `Room` de Fronts of Iron, §7) et partie lancée : file des entrées ; `step()` applique les entrées, avance le moteur d'un tick et renvoie un snapshot par joueur. Tire la grille du catalogue que lui passe l'enveloppe, la transforme (`02-Grilles.md`) et garde la solution | `shared`, `engine` |
 | `packages/catalog` | catalogue des grilles des parties en ligne, avec leurs solutions, écrit par le script de `02-Grilles.md` §1. **Jamais importé par le client** | rien |
-| `client/` | page : accueil, salle d'attente, grille en canvas 2D, clavier, prédiction de son bonhomme, interpolation des autres (§6) | `shared`, `engine` ; `room` en solo |
+| `client/` | page : accueil et salle d'attente en HTML ; partie affichée par Phaser (grille, bonshommes, PV, effets), clavier, prédiction de son bonhomme, interpolation des autres (§6) | `shared`, `engine`, Phaser ; `room` en solo |
 | `worker/` | page, lobby, et enveloppe Durable Object d'une partie : WebSocket, `setInterval` du tick, inscription et signaux au lobby | `room`, `shared`, `catalog` |
 | `server/` | enveloppe Node : serveur WebSocket, `setInterval`, `cloudflared`, inscription et signaux au lobby (plus tard) | `room`, `shared`, `catalog` |
 
@@ -115,30 +115,65 @@ Identique à Fronts of Iron (son `01-Architecture.md` §2) :
 
 Décidé par l'auteur le 15 novembre 2026.
 
-- `input {seq, dir}` : envoyé seulement quand l'ensemble des flèches appuyées
-  change. `dir` sur 4 bits (haut, bas, gauche, droite) ; `seq` numérote les
-  entrées du joueur à partir de 1. L'hôte garde la dernière direction reçue de
-  chaque joueur et l'applique à chaque tick : un bonhomme dont la flèche reste
-  appuyée avance sans nouveau message.
+- `input {seq, dirs}` : une direction tient sur 4 bits (haut, bas, gauche,
+  droite ; deux bits pour une diagonale) ; `dirs` est la liste des dernières
+  directions envoyées, la plus récente en dernier, et sur WebSocket n'en
+  contient qu'une (§3, Transport) ; `seq` numérote les entrées du joueur à
+  partir de 1 et désigne la dernière de `dirs`. Le
+  client lit l'état des flèches **une fois par tick** et n'envoie un `input`
+  que si cet état a changé depuis le tick précédent : au plus un par tick. Un
+  bonhomme dont la flèche reste appuyée avance sans nouveau message.
+- L'hôte range les `input` de chaque joueur dans une file et en applique **un
+  par tick**, dans l'ordre d'arrivée ; sans `input` en attente, il garde la
+  dernière direction appliquée. Plus de 2 en attente (provisoire) : il ne garde
+  que le dernier, pour qu'un retard ne s'accumule pas.
 - `fill {seq, cell, digit}` : remplir la case `cell` (0 à 80) avec `digit`.
   L'hôte vérifie que le bonhomme est sur cette case (avec une tolérance près
   des bords, provisoire, pour un client dont la position prédite est
   légèrement en avance), que la case est vide, puis compare le chiffre à la
-  solution. Ce que produit un mauvais chiffre : `00-Game.md` §3.
+  solution. Chiffre faux : refusé, 1 PV en moins (`00-Game.md` §1).
+
+### Changements de direction rapprochés
+
+Exemple : gauche, puis haut 30 ms plus tard.
+- **Dans le même tick du client** : un seul `input`, avec l'état des flèches à
+  la fin du tick (gauche + haut si les deux sont appuyées, haut seulement si
+  gauche a été relâchée). Le client et l'hôte appliquent cette direction à
+  partir du même tick.
+- **Dans deux ticks différents** : deux `input`, dont chacun a duré au moins un
+  tick chez le client. Le réseau peut les livrer dans le même tick de l'hôte
+  (gigue) ; la file les applique quand même un par tick, donc avec les mêmes
+  durées que chez le client. Sans cette file, l'hôte n'appliquerait que le
+  second, et le client corrigerait la position.
+- Le WebSocket garde l'ordre des messages : l'hôte ne reçoit jamais haut avant
+  gauche.
+- **Ce qui est perdu** : une touche appuyée puis relâchée dans le même tick
+  (moins de 50 ms, moins de 0,15 case de déplacement) n'est pas envoyée.
+- **Ce que ça coûte** : une touche prend effet au début du tick suivant chez
+  le client, donc 0 à 50 ms après l'appui (25 ms en moyenne). Si c'est
+  sensible, passer le tick à 30 Hz (33 ms).
+
+Résultat : sans gigue du réseau au-delà de ce que la file absorbe, le client et
+l'hôte calculent la même trajectoire, tick par tick, et la prédiction n'a rien
+à corriger.
 
 ### Ce que l'hôte envoie : des positions absolues
 
-- `snapshot {tick, players, ack, events}`, à chaque tick, à chaque joueur
-  connecté :
-  - `players` : `[[id, x, y, dir], …]`, tous les bonshommes ;
+- `snapshot {tick, players, ack}`, à chaque tick, à chaque joueur connecté.
+  **Remplaçable** : complet en lui-même, il peut être perdu sans dommage, le
+  suivant le remplace (§3, Transport).
+  - `players` : `[[id, x, y, dir], …]`, tous les bonshommes non éliminés ;
   - `ack` : `[seq, since]`, la dernière entrée du destinataire appliquée par
     l'hôte et le nombre de ticks écoulés depuis. Seul champ propre au
-    destinataire : le reste du message est le même pour tous ;
-  - `events` : ce qui s'est passé pendant ce tick et ne se déduit pas des
-    positions : case remplie (case, chiffre, joueur), remplissage refusé ; plus
-    tard éliminations et bonus.
-- `state {…}` : état complet de la partie (grille sans la solution, joueurs,
-  cases remplies et leur propriétaire), au lancement et à chaque reconnexion.
+    destinataire : le reste du message est le même pour tous.
+- `events {tick, events}`, seulement pour un tick où il s'est passé quelque
+  chose qui ne se déduit pas des positions : case remplie (case, chiffre,
+  joueur) ; chiffre refusé (joueur, case, PV restants) ; bonhomme éliminé
+  (joueur) ; fin de partie (classement) ; plus tard éléments posés.
+  **Doit arriver** : un événement perdu ne se rattrape pas au message suivant.
+- `state {…}` : état complet de la partie (grille sans la solution, joueurs et
+  leurs PV, cases remplies et leur propriétaire), au lancement et à chaque
+  reconnexion.
 
 ### Pourquoi les positions ne dérivent pas
 
@@ -156,18 +191,60 @@ Décidé par l'auteur le 15 novembre 2026.
   client voit l'écart et ramène le bonhomme vers la position de l'hôte : un
   glissement visible, rare (une perte de paquet).
 
+### Transport : WebSocket, protocole prêt pour les datagrammes
+
+Décidé par l'auteur le 15 novembre 2026, après une recherche sur ce que font
+les autres jeux.
+
+- **Le modèle est celui des jeux de référence** (Quake 3, Source, jeux .io) :
+  le serveur calcule à pas fixe et envoie des snapshots de positions ; les
+  clients envoient leurs touches, prédisent leur propre joueur et affichent les
+  autres dans le passé. Ce qui diffère, c'est le transport : ces jeux utilisent
+  l'UDP, où un snapshot perdu est sauté au lieu de bloquer les suivants.
+- **Dans un navigateur, deux API passent par l'UDP** : WebRTC DataChannel en
+  mode non fiable (`ordered: false`, `maxRetransmits: 0`), et WebTransport
+  (datagrammes sur HTTP/3, disponible dans tous les navigateurs depuis Safari
+  26.4, mars 2026). Les deux demandent un serveur capable de les recevoir.
+- **Un Durable Object n'accepte que des WebSockets** (recherche du 15 novembre
+  2026) : pas de WebTransport documenté, pas de pair WebRTC. Cloudflare
+  Realtime relaie des DataChannels non fiables, mais seulement entre clients
+  WebRTC ; un Durable Object ne peut pas les lire.
+- **Donc : WebSocket**, pour les trois modes. Coût accepté : quand un paquet
+  est perdu, TCP le renvoie et retarde les messages suivants d'environ un
+  aller-retour, en partie absorbé par le délai d'interpolation.
+- **Le protocole est prêt pour des datagrammes**, pour qu'un passage à
+  WebTransport (si Cloudflare l'ouvre aux Durable Objects, ou dans `server/`)
+  ne touche ni `packages/engine` ni `packages/room`, seulement les enveloppes et
+  la connexion du client :
+  - `snapshot` est remplaçable, `events` et `state` doivent arriver : sur des
+    datagrammes, le premier passerait en datagramme, les deux autres sur un
+    flux fiable ;
+  - un `input` peut porter les dernières directions envoyées, pas seulement la
+    nouvelle (`input {seq, dirs}`, la plus récente en dernier), pour qu'un
+    datagramme perdu soit compensé par le suivant ; l'hôte ignore celles qu'il
+    a déjà appliquées. Sur WebSocket, une seule direction par message.
+    Provisoire : combien en répéter ;
+  - sur datagrammes, le client enverrait un `input` à chaque tick pendant
+    qu'une flèche est appuyée, et non plus seulement au changement : un
+    « relâché » perdu laisserait sinon le bonhomme avancer. Ce serait jusqu'à
+    20 messages par seconde et par joueur ; sans effet sur les quotas tant que
+    `server/` n'est pas sur Cloudflare.
+
 ### Prédiction de son propre bonhomme
 
-- Le client applique sa propre entrée tout de suite, avec la même fonction
-  `move` que l'hôte et le même tick, et garde sa position prédite à chaque tick
-  local.
+- Le client applique sa propre entrée au tick où il l'envoie, avec la même
+  fonction `move` que l'hôte, sans attendre la réponse, et garde sa position
+  prédite à chaque tick local. L'affichage interpole entre les deux derniers
+  ticks prédits pour rester fluide à 60 images par seconde.
 - À chaque snapshot, il reprend sa position au tick où il a appliqué l'entrée
   `ack.seq`, l'avance de `ack.since` ticks dans la direction de cette entrée,
   et compare le résultat à la position envoyée par l'hôte. L'écart est ajouté à
   sa position actuelle, réparti sur quelques images (provisoire).
 - L'écart vient de la différence entre la durée d'un appui vue par le client
-  et vue par l'hôte (gigue du réseau) : de l'ordre d'un tick de déplacement.
-  Il grandit seulement quand un message est retardé (exemple ci-dessus).
+  et vue par l'hôte. Grâce aux entrées par tick et à la file de l'hôte
+  (ci-dessus), il est nul tant que la gigue du réseau reste sous deux ticks ;
+  il apparaît quand un message est très retardé (exemple du paragraphe
+  « Pourquoi les positions ne dérivent pas »).
 
 ### Affichage des autres bonshommes
 
@@ -260,11 +337,31 @@ Propre à ce jeu :
   envoyer un message, recevoir un message. En ligne, c'est le WebSocket ; en
   solo, `postMessage` vers le Web Worker qui contient `packages/room` et sa
   minuterie de `TICK_MS`. Le reste de la page ne sait pas quel mode tourne.
-- **Boucle d'affichage** : `requestAnimationFrame`. À chaque image : son
-  bonhomme à sa position prédite (corrigée progressivement), les autres
-  interpolés (§3), la grille et ses couleurs d'après les événements reçus.
-- **Clavier** : un `input` part à chaque changement de l'ensemble des flèches
-  appuyées, jamais à chaque image.
+- **Accueil et salle d'attente en HTML** (formulaires, listes) ; **la partie
+  est affichée par Phaser**, dans un canvas (WebGL, ou canvas 2D en repli).
+  Choix de l'auteur le 15 novembre 2026, parce que viendront des effets
+  visuels, des particules, peut-être des tirs et des zombies (`00-Game.md`
+  §3) : Phaser fournit particules, interpolations d'animation, sprites animés,
+  caméra et chargement des images. Version : la dernière stable au moment de
+  l'implémentation. Phaser pèse lourd (de l'ordre du mégaoctet minifié, à
+  mesurer dans le build) ; il n'est chargé qu'au lancement d'une partie.
+- **Phaser ne fait qu'afficher et lire le clavier.** Les positions viennent de
+  la prédiction (son bonhomme) et des snapshots (les autres) ; les cases, PV et
+  éléments viennent des événements de l'hôte. La physique de Phaser (Arcade,
+  Matter) ne décide de rien : une collision, un tir qui touche, un PV perdu
+  sont calculés par l'hôte dans `packages/engine`. Elle peut servir à des
+  effets purement visuels (particules qui rebondissent).
+- **Boucle d'affichage** : celle de Phaser (une image par rafraîchissement de
+  l'écran). À chaque image : son bonhomme interpolé entre ses deux derniers
+  ticks prédits (corrigé progressivement), les autres interpolés entre deux
+  snapshots (§3), la grille et ses couleurs, les PV en haut de la grille.
+- **Clavier** : l'état des flèches est lu une fois par tick (§3) ; jamais un
+  `input` par image ni par événement clavier.
+- **Plus tard, tirs et zombies** : ils seraient calculés par l'hôte et
+  entreraient dans les snapshots. L'hôte devra tenir compte du décalage
+  d'affichage des autres bonshommes (100 ms plus un demi aller-retour) pour
+  décider si un tir touche. Avec beaucoup d'objets, le snapshot grossit : un
+  format binaire deviendra peut-être utile.
 
 ## 7. Repris de Fronts of Iron
 
@@ -289,6 +386,10 @@ copié puis adapté ; les deux dépôts évoluent ensuite séparément.
 | Le client envoie sa position (10 à 20 fois par seconde), l'hôte la recopie | 1 200 à 2 400 requêtes par partie (40 à 80 parties par jour) ; un client peut envoyer n'importe quelle position. Écarté par l'auteur le 15 novembre 2026 |
 | Le client envoie une entrée à chaque tick (réconciliation exacte, modèle courant des jeux d'action) | 20 messages par seconde et par joueur ; un client qui en envoie plus avance plus vite si l'hôte ne les plafonne pas |
 | WebRTC entre navigateurs | demande un serveur de mise en relation et des serveurs STUN/TURN ; un Durable Object ne peut pas être un pair ; il faut de toute façon un hôte qui garde la solution |
+| Positions envoyées par chaque client aux autres par Cloudflare Realtime (DataChannels non fiables) | un vrai flux UDP sur Cloudflare, mais c'est le client qui décide de sa position (triche), et l'hôte ne la voit plus : il ne peut ni vérifier qu'un bonhomme est sur la case qu'il remplit, ni décider plus tard d'un tir ou d'un contact. Écarté par l'auteur le 15 novembre 2026 |
+| WebTransport ou WebRTC vers l'hôte dès la v1 | impossible avec un Durable Object (§3, Transport) ; possible seulement dans `server/`, qui attend. Le protocole est prêt pour ce passage |
+| Grille en HTML (comme la maquette) | suffit pour 81 cases et 4 bonshommes, pas pour les effets visuels, particules et tirs prévus. Écarté par l'auteur le 15 novembre 2026 |
+| Appliquer chaque touche dès l'événement clavier, entre deux ticks | l'hôte, qui avance par ticks, ne peut pas reproduire la même durée : chaque changement de direction rapproché produirait une petite correction |
 | UDP | un navigateur ne peut pas faire d'UDP brut. TCP retarde les messages qui suivent un paquet perdu ; à 2 à 4 joueurs et 20 snapshots par seconde, le délai d'interpolation l'absorbe en général |
 
 ## 9. À vérifier, à décider, état d'avancement
@@ -298,9 +399,13 @@ copié puis adapté ; les deux dépôts évoluent ensuite séparément.
 - La régularité d'un `setInterval` de 50 ms dans un Durable Object : non
   mesurée (Fronts of Iron tourne à 100 ms).
 - Le nombre réel d'entrées par seconde et par joueur (estimé à 3, §5).
+- WebTransport dans les Workers et les Durable Objects : absent de la
+  documentation de Cloudflare le 15 novembre 2026 ; à surveiller (§3,
+  Transport).
 
 Provisoire, à régler en jouant : tick, unités, vitesse, délai d'interpolation,
-répartition de la correction de prédiction, tolérance de remplissage.
+répartition de la correction de prédiction, tolérance de remplissage, taille de
+la file d'entrées de l'hôte.
 
 À décider avec l'auteur : les points ouverts de `00-Game.md` §3 et de
 `02-Grilles.md` §4 (niveaux de difficulté, taille du catalogue).
@@ -334,6 +439,18 @@ Pas de `deploy.yml` avant l'étape 3 : un push sur `main` lancerait
   changent.
 - **Laisser le client décider** d'une case remplie ou de sa position : toute la
   vérification se fait dans `packages/room` (`CLAUDE.md`, règle 3).
+- **Utiliser la physique de Phaser pour une règle** (collision, tir, PV) : elle
+  tourne dans le navigateur de chaque joueur, pas chez l'hôte, et chaque écran
+  déciderait autre chose. Phaser affiche ; `packages/engine` décide.
+- **Importer Phaser dans `packages/engine` ou `packages/room`** : ils ne
+  tourneraient plus dans un Durable Object ni sous Node (`CLAUDE.md`,
+  règle 2).
+- **Mettre un événement dans `snapshot`** « pour faire un message de moins » :
+  sur WebSocket rien ne casse, mais le jour où `snapshot` passe en datagramme,
+  une case remplie ou un PV perdu disparaîtrait avec le paquet.
+- **Remplacer la file d'entrées de l'hôte par « la dernière direction reçue »**
+  : deux `input` livrés dans le même tick feraient perdre un tick de
+  déplacement au premier, et le client corrigerait sa position.
 - **Écrire une règle de partie dans une enveloppe** (le Durable Object, plus
   tard `server/`) au lieu de `packages/room` : les modes se comporteraient
   différemment. L'enveloppe ne fait que la minuterie et le transport.

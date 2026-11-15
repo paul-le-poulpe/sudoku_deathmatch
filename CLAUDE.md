@@ -51,7 +51,8 @@ packages/
              tire la grille du catalogue, la transforme, garde la solution
   catalog/   grilles des parties en ligne et leurs solutions (02-Grilles.md) ;
              jamais importé par client/
-client/      page du jeu (Vite + TypeScript) : accueil, salle d'attente, grille,
+client/      page du jeu (Vite + TypeScript) : accueil et salle d'attente en HTML,
+             partie affichée par Phaser (affichage seulement, jamais une règle),
              prédiction de son bonhomme, interpolation des autres ; en solo,
              room + engine dans un Web Worker
 worker/      Worker Cloudflare : sert client/dist + lobby (Durable Object) +
