@@ -96,6 +96,8 @@ export class Room {
         return this.#setLevel(conn, member, msg.level);
       case "start":
         return this.#start(conn, member);
+      case "restart":
+        return this.#restart(conn, member);
       case "input":
         if (this.#match === null) return [error(conn, "not_started")];
         this.#match.input(member.id, msg.seq, msg.dirs);
@@ -241,13 +243,32 @@ export class Room {
     if (!member.host) return [error(conn, "not_host")];
     if (this.#state === "started") return [error(conn, "game_started")];
     // Les identifiants sont déjà `1..n` sans trou (#renumber) : on les fige en changeant d'état.
-    const grid = pickGrid(this.#catalog, this.#level, this.#env.randomSeed());
     this.#state = "started";
-    this.#match = new Match(grid.puzzle, grid.solution, this.#members.map((m) => m.id));
+    return this.#launch();
+  }
+
+  /**
+   * Partie finie, à la demande de l'hôte : une nouvelle grille du même niveau, avec les joueurs connectés.
+   * Provisoire : un joueur déconnecté à ce moment quitte la partie, et son jeton n'est plus valable.
+   */
+  #restart(conn: string, member: Member): Outgoing[] {
+    if (!member.host) return [error(conn, "not_host")];
+    if (this.#match === null || !this.#match.ended) return [error(conn, "not_ended")];
+    for (const m of this.#members.slice()) {
+      if (m.conn === null) this.#members.splice(this.#members.indexOf(m), 1);
+    }
+    return this.#launch();
+  }
+
+  /** Tire une grille, crée la partie, et envoie `start` puis `state` à chaque joueur connecté. */
+  #launch(): Outgoing[] {
+    const grid = pickGrid(this.#catalog, this.#level, this.#env.randomSeed());
+    const match = new Match(grid.puzzle, grid.solution, this.#members.map((m) => m.id));
+    this.#match = match;
     const out: Outgoing[] = [];
     for (const m of this.#members) {
       if (m.conn === null) continue;
-      out.push(this.#startMessage(m, m.conn), { to: m.conn, message: this.#match.state(m.id) });
+      out.push(this.#startMessage(m, m.conn), { to: m.conn, message: match.state(m.id) });
     }
     return out;
   }
@@ -258,6 +279,7 @@ export class Room {
       message: {
         type: "start",
         you: member.id,
+        host: this.#members.find((m) => m.host)?.id ?? 0,
         level: this.#level,
         players: this.#members.map((m) => ({ id: m.id, name: m.name, color: m.color })),
       },
@@ -314,6 +336,8 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
       return { type: "set_level", level: m.level as Level };
     case "start":
       return { type: "start" };
+    case "restart":
+      return { type: "restart" };
     case "input": {
       if (!isCount(m.seq, 1, Number.MAX_SAFE_INTEGER) || !Array.isArray(m.dirs)) return null;
       const dirs = m.dirs as unknown[];

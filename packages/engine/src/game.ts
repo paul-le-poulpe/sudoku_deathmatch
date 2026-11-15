@@ -27,6 +27,8 @@ export interface Player {
   hp: number;
   alive: boolean;
   score: number;
+  /** Tick de son élimination ; 0 tant qu'il est en vie. */
+  outTick: number;
 }
 
 export interface RankEntry {
@@ -133,7 +135,7 @@ export function createGame(puzzle: ArrayLike<number>, solution: ArrayLike<number
   }
   const players = playerIds.map((id, k): Player => {
     const [x, y] = SPAWNS[k]!;
-    return { id, x, y, dir: 0, hp: START_HP, alive: true, score: 0 };
+    return { id, x, y, dir: 0, hp: START_HP, alive: true, score: 0, outTick: 0 };
   });
   return { tick: 0, solution: Uint8Array.from(solution), digits, owner, players, traps: [], balls: [], lastBall: 0, ranking: null };
 }
@@ -176,12 +178,13 @@ function alivePlayer(game: Game, id: number): Player | undefined {
 }
 
 /** Retire un PV à `p`, annonce `event(hp)`, puis l'élimination si c'était le dernier. */
-function damage(p: Player, events: EngineEvent[], event: (hp: number) => EngineEvent): void {
+function damage(game: Game, p: Player, events: EngineEvent[], event: (hp: number) => EngineEvent): void {
   p.hp--;
   events.push(event(p.hp));
   if (p.hp <= 0) {
     p.alive = false;
     p.dir = 0;
+    p.outTick = game.tick;
     events.push({ type: "eliminated", player: p.id });
   }
 }
@@ -202,7 +205,7 @@ function applyFill(game: Game, fill: FillRequest, events: EngineEvent[]): void {
     events.push({ type: "filled", cell: fill.cell, digit: fill.digit, player: p.id });
     return;
   }
-  damage(p, events, (hp) => ({ type: "refused", cell: fill.cell, digit: fill.digit, player: p.id, hp }));
+  damage(game, p, events, (hp) => ({ type: "refused", cell: fill.cell, digit: fill.digit, player: p.id, hp }));
 }
 
 /** Pose : case remplie par ce joueur, sans piège, bonhomme dessus (même tolérance qu'un remplissage). */
@@ -234,7 +237,7 @@ function applyHit(game: Game, hit: HitRequest, events: EngineEvent[]): void {
   const ball = game.balls.find((b) => b.id === hit.ball);
   if (p === undefined || ball === undefined || ball.owner === p.id || !launched(ball, game.tick)) return;
   removeBall(game, ball);
-  damage(p, events, (hp) => ({ type: "ball_hit", ball: ball.id, player: p.id, hp }));
+  damage(game, p, events, (hp) => ({ type: "ball_hit", ball: ball.id, player: p.id, hp }));
 }
 
 /** Le bonhomme adverse non éliminé le plus proche de (x, y) ; à égalité, le premier dans l'ordre des joueurs. */
@@ -297,7 +300,7 @@ function controlBalls(game: Game, events: EngineEvent[]): void {
     for (const p of game.players) {
       if (!p.alive || p.id === ball.owner || !within(x, y, p.x, p.y, reach)) continue;
       removeBall(game, ball);
-      damage(p, events, (hp) => ({ type: "ball_hit", ball: ball.id, player: p.id, hp }));
+      damage(game, p, events, (hp) => ({ type: "ball_hit", ball: ball.id, player: p.id, hp }));
       break;
     }
   }
@@ -311,7 +314,7 @@ function stepMines(game: Game, events: EngineEvent[]): void {
     const i = game.traps.findIndex((t) => t.kind === "mine" && t.cell === cell && t.owner !== p.id);
     if (i < 0) continue;
     game.traps.splice(i, 1);
-    damage(p, events, (hp) => ({ type: "exploded", cell, player: p.id, hp }));
+    damage(game, p, events, (hp) => ({ type: "exploded", cell, player: p.id, hp }));
   }
 }
 
@@ -323,19 +326,17 @@ function near(p: Player, cell: number): boolean {
 }
 
 /**
- * Le classement si la partie est finie, sinon `null` (00-Game §2). Finie : grille pleine, ou il ne reste
- * qu'un bonhomme (aucun en solo). Classement au nombre de cases ; quand il ne reste qu'un bonhomme, il
- * est premier (provisoire). À égalité, l'ordre des joueurs.
+ * Le classement si la partie est finie, sinon `null` (00-Game §1, Fin de partie). Finie : grille pleine, ou
+ * il ne reste qu'un bonhomme (aucun en solo). D'abord les survivants, au nombre de cases remplies ; puis les
+ * éliminés, du dernier éliminé au premier. Provisoire : à égalité de cases, ou pour deux éliminations du
+ * même tick, celui qui a rempli le plus de cases, puis l'ordre des joueurs (`sort` est stable).
  */
 function finalRanking(game: Game): RankEntry[] | null {
   const alive = game.players.filter((p) => p.alive).length;
   const full = !game.owner.includes(0);
   const solo = game.players.length === 1;
-  const lastStanding = !solo && alive <= 1;
-  if (!full && !lastStanding && !(solo && alive === 0)) return null;
-  const order = game.players.slice().sort((a, b) => {
-    if (lastStanding && a.alive !== b.alive) return a.alive ? -1 : 1;
-    return b.score - a.score;
-  });
-  return order.map((p) => ({ player: p.id, score: p.score, alive: p.alive }));
+  if (!full && !(solo ? alive === 0 : alive <= 1)) return null;
+  const survivors = game.players.filter((p) => p.alive).sort((a, b) => b.score - a.score);
+  const out = game.players.filter((p) => !p.alive).sort((a, b) => b.outTick - a.outTick || b.score - a.score);
+  return survivors.concat(out).map((p) => ({ player: p.id, score: p.score, alive: p.alive }));
 }

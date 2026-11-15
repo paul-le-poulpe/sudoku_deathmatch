@@ -36,7 +36,22 @@ Décidé par l'auteur le 15 novembre 2026.
   doivent les éviter : c'est une épreuve d'adresse. Premiers pièges : la mine
   et la tourelle. Règles : `03-Pieges.md`.
 - **Fin de partie.** Quand toutes les cases sont remplies, ou quand tous les
-  bonshommes sauf un ont été éliminés. On détermine alors le vainqueur.
+  bonshommes sauf un ont été éliminés. La partie affiche alors un classement :
+  d'abord les joueurs qui ont survécu, classés par nombre de cases remplies,
+  du plus au moins ; puis les joueurs éliminés, du dernier éliminé au premier.
+  Sur cette fenêtre, l'hôte a un bouton pour relancer une partie (décidé par
+  l'auteur le 15 novembre 2026).
+
+  Provisoire :
+  - deux survivants avec autant de cases, ou deux joueurs éliminés au même
+    tick : le premier est celui qui a rempli le plus de cases, puis l'ordre de
+    la salle ;
+  - la relance tire une nouvelle grille du même niveau et garde les joueurs
+    connectés ; un joueur déconnecté à ce moment quitte la partie ;
+  - les autres joueurs voient sur la fenêtre que l'hôte peut relancer.
+- **Couleurs des joueurs** : palette « Classique » (bleu, rouge, vert, jaune,
+  violet, charbon), choisie par l'auteur le 15 novembre 2026 dans la maquette
+  « Sudoku Deathmatch — couleurs ». Valeurs : `client/src/colors.ts`.
 - **Bots.** Il pourra y en avoir à terme, pas avant que les fonctionnalités du
   jeu soient en place.
 
@@ -57,8 +72,7 @@ elles pourront changer ensuite.
   voir la partie.
 - **Fin** : la grille est pleine, ou il ne reste qu'un bonhomme (§1). En solo,
   la partie finit aussi quand le joueur est éliminé.
-- **Classement** : au nombre de cases remplies. Provisoire : quand il ne reste
-  qu'un bonhomme, il est premier, et les éliminés suivent au nombre de cases.
+- **Classement et relance** : §1, Fin de partie.
 - **Difficulté** : trois niveaux, choisis par l'hôte dans la salle d'attente
   (`02-Grilles.md` §3).
 - **Solo** : le joueur seul sur la grille, sans bots.
@@ -74,7 +88,9 @@ de ce document font foi.
 ## 3. Points ouverts
 
 - **Pièges** : `03-Pieges.md` §4.
-- **Vainqueur** : la règle définitive (version 1 : §2, Classement).
+- **Couleurs et signaux rouges** : la palette a un rouge, et le chiffre refusé
+  clignote en rouge, la mine explose en rouge et orange ; le gris de la case
+  d'un joueur « Charbon » ressemble à celui des chiffres donnés.
 - **Collisions entre bonshommes** : la version 1 les laisse se traverser (§2) ;
   à décider plus tard.
 - **Regagner des PV** : possible ou non.

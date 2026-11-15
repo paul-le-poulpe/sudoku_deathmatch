@@ -33,10 +33,14 @@ self.addEventListener("message", (event: MessageEvent<unknown>) => {
   const r = room;
   if (r === null) return;
   post(r.handle(CONN, data));
-  if (timer === undefined && r.summary().state === "started") {
+  // Partie lancée ou relancée (`restart`) : les ticks reprennent ; une partie finie les arrête.
+  if (timer === undefined && r.summary().state === "started" && !r.ended) {
     timer = setInterval(() => {
       post(r.step());
-      if (r.ended) clearInterval(timer);
+      if (r.ended) {
+        clearInterval(timer);
+        timer = undefined;
+      }
     }, TICK_MS);
   }
 });

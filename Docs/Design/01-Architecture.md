@@ -378,6 +378,7 @@ Messages de la salle repris : `join`, `welcome`, `room`, `set_color`, `start`,
 | `order`, `hash`, `turn`, `turns`, `desync` | `input`, `fill`, `snapshot`, `state` |
 | `pause`, `paused` | pas de pause tant que `00-Game.md` n'en parle pas |
 | reconnexion : départ + tous les tours | reconnexion : `state` |
+| (rien) | `restart` : l'hôte relance une partie finie (`00-Game.md` §1, Fin de partie) ; chaque joueur connecté reçoit un nouveau `start`, qui porte l'`id` de l'hôte (`host`), puis `state` |
 
 ## 5. Hébergement et quotas
 
@@ -537,6 +538,11 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
    Worker, absence du catalogue en ligne dans `client/dist`. Pas vérifié : une
    partie jouée. En solo, une tourelle ne tire jamais et une mine n'explose
    jamais : il n'y a pas d'adversaire.
+5. **Fait (15 novembre 2026) : fin de partie et couleurs.** Classement
+   (survivants, puis éliminés du dernier au premier), bouton de relance de
+   l'hôte sur la fenêtre de fin (`restart`), palette « Classique »
+   (`client/src/colors.ts`). Vérifié : typecheck, build du client et du
+   Worker. Pas vérifié : une partie jouée jusqu'au bout, une relance.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -555,8 +561,17 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   ou un bonhomme trop loin de la case.
 - **Clavier** : écouté sur la fenêtre (`KeyboardEvent.code`, donc ZQSD sur un
   clavier AZERTY et WASD sur QWERTY) ; le clavier de Phaser est désactivé.
-- **Après la fin**, l'hôte n'envoie plus de snapshots ; le Durable Object
-  arrête sa minuterie de ticks.
+- **Après la fin**, l'hôte n'envoie plus de snapshots ; le Durable Object et
+  le Web Worker du solo arrêtent leur minuterie de ticks, et la relancent dès
+  qu'une partie non finie existe (`restart`). Le Web Worker remet sa minuterie
+  à `undefined` en l'arrêtant : sans cela, il ne relancerait jamais les ticks.
+- **Relance** (`Room.#restart`) : les joueurs déconnectés sont retirés de la
+  salle (leur jeton ne sert plus), les autres gardent leur `id` et leur
+  couleur ; nouvelle grille du même niveau. La page remplace l'écran de partie
+  à chaque `start`.
+- **Classement** (`packages/engine/src/game.ts`) : chaque joueur garde le tick
+  de son élimination (`outTick`) ; survivants triés par cases, éliminés par
+  `outTick` décroissant, puis par cases ; à égalité, l'ordre de la salle.
 - **Accueil et salle** : écrits à neuf d'après celui de Fronts of Iron, sans sa
   reprise automatique au chargement (« Reprendre » dans la liste).
 - **Instant des dangers** (`session.ts`) : à chaque snapshot dont l'`ack`

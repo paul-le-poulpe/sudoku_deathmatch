@@ -88,6 +88,17 @@ export function startPlay(options: {
   $("game-quit").onclick = quit;
   $("game-end-home").onclick = quit;
 
+  // Fin de partie : l'hôte seul peut relancer (00-Game §1) ; le nouveau `start` remplace cet écran.
+  const isHost = options.start.you === options.start.host;
+  const restart = $("game-end-restart") as HTMLButtonElement;
+  restart.hidden = !isHost;
+  restart.disabled = false;
+  $("game-end-wait").hidden = isHost;
+  restart.onclick = () => {
+    restart.disabled = true;
+    options.send({ type: "restart" });
+  };
+
   let view: GameView | null = null;
   let destroyed = false;
   void createGameView(canvas, session, () => keyboard.dir()).then((v) => {

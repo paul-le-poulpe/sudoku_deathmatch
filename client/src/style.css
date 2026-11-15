@@ -461,6 +461,24 @@ p {
   max-width: 340px;
 }
 
+.end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.end-actions .btn {
+  align-self: center;
+}
+
+/* Bouton secondaire sur le fond sombre de la fin de partie. */
+.btn-on-dark {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: transparent;
+  color: #ffffff;
+}
+
 .digits {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));

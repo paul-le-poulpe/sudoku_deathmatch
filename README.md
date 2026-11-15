@@ -7,7 +7,9 @@ coûte un point de vie, et à 0 le bonhomme est éliminé. Sur une case qu'il a
 remplie, un joueur peut poser un piège : une mine, que les autres ne voient
 pas, ou une tourelle, qui tire des boules lentes sur l'adversaire le plus
 proche. La partie finit quand la grille est pleine ou qu'il ne reste qu'un
-bonhomme.
+bonhomme : le classement met d'abord les survivants (au nombre de cases
+remplies), puis les éliminés, du dernier au premier, et l'hôte peut relancer
+une partie.
 
 En développement : les règles sont dans `Docs/Design/00-Game.md`, et les
 valeurs de réglage (vitesse, niveaux…) sont des valeurs d'essai.

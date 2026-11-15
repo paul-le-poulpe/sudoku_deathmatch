@@ -137,8 +137,12 @@
               <div id="game-end" class="game-end" hidden>
                 <span class="end-title">Partie terminée</span>
                 <ol id="game-ranking" class="ranking"></ol>
-                <span class="end-note">Classement au nombre de cases remplies ; s'il ne reste qu'un bonhomme, il est premier.</span>
-                <button id="game-end-home" type="button" class="btn btn-light">Retour à l'accueil</button>
+                <span class="end-note">D'abord les survivants, au nombre de cases remplies ; puis les éliminés, du dernier au premier.</span>
+                <span id="game-end-wait" class="end-note" hidden>L'hôte peut relancer une partie.</span>
+                <div class="end-actions">
+                  <button id="game-end-restart" type="button" class="btn btn-light" hidden>Relancer une partie</button>
+                  <button id="game-end-home" type="button" class="btn btn-on-dark">Retour à l'accueil</button>
+                </div>
               </div>
             </div>
             <div id="game-digits" class="digits" role="group" aria-label="Écrire un chiffre"></div>

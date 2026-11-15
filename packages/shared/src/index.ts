@@ -125,6 +125,8 @@ export type ClientMessage =
   | { readonly type: "set_level"; readonly level: Level }
   /** Hôte seulement : lance la partie. */
   | { readonly type: "start" }
+  /** Hôte seulement, partie finie : relance une partie avec les joueurs connectés (00-Game §1). */
+  | { readonly type: "restart" }
   /**
    * Partie lancée : les dernières directions du joueur, la plus récente en dernier ; `seq` est le numéro
    * de la dernière. Une direction : 4 bits (haut 1, bas 2, gauche 4, droite 8). Sur WebSocket, une seule.
@@ -211,7 +213,8 @@ export type RoomErrorCode =
   | "invalid_color"
   | "color_taken"
   | "replaced"
-  | "not_started";
+  | "not_started"
+  | "not_ended";
 
 /** Texte de chaque erreur de la salle, envoyé avec le code : la page l'affiche tel quel. */
 export const ROOM_ERROR_TEXT: Readonly<Record<RoomErrorCode, string>> = {
@@ -227,6 +230,7 @@ export const ROOM_ERROR_TEXT: Readonly<Record<RoomErrorCode, string>> = {
   color_taken: "Cette couleur vient d'être prise par un autre joueur.",
   replaced: "Vous êtes connecté à cette partie depuis un autre onglet ou un autre appareil.",
   not_started: "Message refusé par le serveur : la partie n'est pas encore lancée.",
+  not_ended: "La partie n'est pas finie : on ne peut pas encore la relancer.",
 };
 
 export type ServerMessage =
@@ -234,8 +238,11 @@ export type ServerMessage =
   | { readonly type: "welcome"; readonly token: string }
   /** État de la salle, à chaque changement tant que la partie n'est pas lancée. `you` : l'`id` du destinataire. */
   | { readonly type: "room"; readonly you: number; readonly players: readonly RoomPlayer[]; readonly level: Level }
-  /** Au lancement et à chaque reconnexion après le lancement ; suivi de `state`. */
-  | { readonly type: "start"; readonly you: number; readonly level: Level; readonly players: readonly StartPlayer[] }
+  /**
+   * Au lancement, à chaque relance et à chaque reconnexion après le lancement ; suivi de `state`. `host` :
+   * l'`id` de l'hôte, le seul qui peut relancer.
+   */
+  | { readonly type: "start"; readonly you: number; readonly host: number; readonly level: Level; readonly players: readonly StartPlayer[] }
   /**
    * État complet de la partie, sans la solution : au lancement et à la reconnexion.
    * `givens` : 81 chiffres, `0` pour une case à remplir. `cells` : cases remplies par des joueurs.
