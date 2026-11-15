@@ -22,6 +22,25 @@ export const FILL_TOLERANCE = 200;
 /** Points de vie au départ (00-Game §1). */
 export const START_HP = 3;
 
+// ---- pièges (03-Pieges, valeurs provisoires) ----
+
+/** Rayon de contact d'un bonhomme avec une boule : 0,2 case. */
+export const BODY_RADIUS = 200;
+/** Boule : déplacement par tick (75 à 20 ticks par seconde = 1,5 case par seconde), rayon (diamètre 0,3 case). */
+export const BALL_SPEED = 75;
+export const BALL_RADIUS = 150;
+/** Distance entre les centres d'une boule et d'un bonhomme en dessous de laquelle ils se touchent. */
+export const BALL_CONTACT = BALL_RADIUS + BODY_RADIUS;
+/** Tourelle : première boule 1 s après la pose, puis une toutes les 3 s ; chacune visible 1 s avant de partir. */
+export const TURRET_FIRST_TICKS = 20;
+export const TURRET_INTERVAL_TICKS = 60;
+export const BALL_CHARGE_TICKS = 20;
+/**
+ * Contrôle de l'hôte (01-Architecture §3, Pièges et projectiles) : il compte lui-même un contact quand les
+ * centres sont à moins de BALL_CONTACT − HIT_CONTROL_MARGIN, même si le client ne l'a pas signalé.
+ */
+export const HIT_CONTROL_MARGIN = 300;
+
 /** Positions de départ, dans l'ordre des joueurs : les quatre coins. Provisoire. */
 export const SPAWNS: readonly (readonly [number, number])[] = [
   [CELL / 2, CELL / 2],

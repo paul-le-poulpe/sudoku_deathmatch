@@ -1,7 +1,8 @@
-// L'écran de partie : la vue Phaser (scene.ts), et autour en HTML les boutons des chiffres, le message,
-// le panneau des joueurs et le classement de fin. Créé au message `start`, détruit en quittant la partie.
+// L'écran de partie : la vue Phaser (scene.ts), et autour en HTML les boutons des chiffres et des pièges,
+// le message, le panneau des joueurs et le classement de fin. Créé au message `start`, détruit en
+// quittant la partie.
 
-import type { ClientMessage, ServerMessage } from "@sudoku-deathmatch/shared";
+import type { ClientMessage, ServerMessage, TrapKind } from "@sudoku-deathmatch/shared";
 
 import { playerColor } from "../colors.ts";
 import { LEVEL_LABEL } from "../levels.ts";
@@ -29,6 +30,7 @@ export function startPlay(options: {
   const session = new PlaySession(options.start, options.send);
   const keyboard = new Keyboard();
   keyboard.onDigit = (d) => session.pressDigit(d, performance.now());
+  keyboard.onTrap = (kind) => session.pressTrap(kind, performance.now());
   keyboard.attach();
 
   const canvas = $("game-canvas");
@@ -50,6 +52,37 @@ export function startPlay(options: {
       return b;
     }),
   );
+
+  // Barre des pièges (03-Pieges §1), sous les chiffres. Grisée quand la pose est impossible.
+  const myColor = playerColor(options.start.players.find((p) => p.id === options.start.you)?.color ?? 0).color;
+  const trapButtons = (
+    [
+      ["mine", "Mine", "A", "Poser une mine (touche A, Q en QWERTY)"],
+      ["turret", "Tourelle", "E", "Poser une tourelle (touche E)"],
+    ] as const satisfies readonly (readonly [TrapKind, string, string, string])[]
+  ).map(([kind, label, key, aria]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "trap";
+    b.setAttribute("aria-label", aria);
+    const icon = document.createElement("span");
+    icon.className = `trap-icon trap-icon-${kind}`;
+    icon.style.setProperty("--c", myColor);
+    icon.setAttribute("aria-hidden", "true");
+    const text = document.createElement("span");
+    text.className = "trap-label";
+    text.textContent = label;
+    const chip = document.createElement("span");
+    chip.className = "trap-key";
+    chip.setAttribute("aria-hidden", "true");
+    chip.textContent = key;
+    b.append(icon, text, chip);
+    // Le clic ne prend pas le focus : les flèches restent au jeu.
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+    b.addEventListener("click", () => session.pressTrap(kind, performance.now()));
+    return b;
+  });
+  $("game-traps").replaceChildren(...trapButtons);
 
   const quit = (): void => options.onQuit();
   $("game-quit").onclick = quit;
@@ -103,11 +136,14 @@ export function startPlay(options: {
   };
   session.onChange = renderPanel;
 
-  // Le message sous la grille s'efface tout seul : relu quelques fois par seconde.
+  // Le message sous la grille s'efface tout seul, et les boutons des pièges suivent la case sous le
+  // bonhomme : relus quelques fois par seconde.
   const message = $("game-message");
   const timer = setInterval(() => {
     const now = performance.now();
     message.textContent = now < session.messageUntil ? session.message : "";
+    const blocked = !session.canPlace();
+    for (const b of trapButtons) if (b.disabled !== blocked) b.disabled = blocked;
   }, 150);
 
   return {

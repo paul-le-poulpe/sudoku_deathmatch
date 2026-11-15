@@ -480,6 +480,96 @@ p {
   cursor: pointer;
 }
 
+.traps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: 504px;
+}
+
+.trap {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trap:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.trap-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.trap-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--ground);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Icônes des pièges, dans la couleur du joueur (`--c`), comme sur la grille (scene.ts). */
+.trap-icon {
+  position: relative;
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.trap-icon-mine::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 2px solid var(--c);
+  border-radius: 2px;
+}
+
+.trap-icon-turret::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 2px solid var(--c);
+  border-radius: 50%;
+}
+
+.trap-icon-turret::after {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 1px;
+  width: 6px;
+  height: 6px;
+  background: var(--c);
+  border-radius: 1px;
+}
+
 .game-message {
   min-height: 24px;
   max-width: 504px;

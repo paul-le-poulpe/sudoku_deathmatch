@@ -13,9 +13,11 @@ import {
   ROOM_ERROR_TEXT,
   isLevel,
   isPlayerColor,
+  isTrapKind,
   normalizePlayerName,
   pickPlayerColor,
   type ClientMessage,
+  type GameEvent,
   type Level,
   type RoomErrorCode,
   type RoomPlayer,
@@ -102,13 +104,22 @@ export class Room {
         if (this.#match === null) return [error(conn, "not_started")];
         this.#match.fill(member.id, msg.cell, msg.digit);
         return [];
+      case "place":
+        if (this.#match === null) return [error(conn, "not_started")];
+        this.#match.place(member.id, msg.cell, msg.kind);
+        return [];
+      case "hit":
+        if (this.#match === null) return [error(conn, "not_started")];
+        this.#match.hit(member.id, msg.ball);
+        return [];
     }
   }
 
   /**
    * Un tick : la partie avance, chaque joueur connecté reçoit son `snapshot` (positions communes, `ack`
-   * propre) et, s'il s'est passé quelque chose, le même message `events`. Rien avant le lancement ni
-   * après la fin.
+   * propre) et, s'il s'est passé quelque chose qu'il peut voir, un message `events`. La pose d'une mine
+   * et une pose refusée ne vont qu'au joueur concerné (01-Architecture §3, Pièges cachés). Rien avant le
+   * lancement ni après la fin.
    */
   step(): Outgoing[] {
     const match = this.#match;
@@ -117,11 +128,20 @@ export class Room {
     const tick = match.game.tick;
     const players = match.positions();
     const out: Outgoing[] = [];
-    const eventsMessage: ServerMessage | null = events.length > 0 ? { type: "events", tick, events } : null;
+    const shared = events.every((ev) => privateTo(ev) === null);
+    const common: ServerMessage | null = shared && events.length > 0 ? { type: "events", tick, events } : null;
     for (const m of this.#members) {
       if (m.conn === null) continue;
       out.push({ to: m.conn, message: { type: "snapshot", tick, players, ack: match.ack(m.id) } });
-      if (eventsMessage !== null) out.push({ to: m.conn, message: eventsMessage });
+      if (common !== null) {
+        out.push({ to: m.conn, message: common });
+      } else if (!shared) {
+        const mine = events.filter((ev) => {
+          const only = privateTo(ev);
+          return only === null || only === m.id;
+        });
+        if (mine.length > 0) out.push({ to: m.conn, message: { type: "events", tick, events: mine } });
+      }
     }
     return out;
   }
@@ -194,7 +214,7 @@ export class Room {
     if (this.#match !== null) {
       // Après le lancement : le message de départ, puis l'état courant (pas d'historique, 01-Architecture §3).
       this.#match.resetInputs(member.id);
-      out.push(this.#startMessage(member, conn), { to: conn, message: this.#match.state() });
+      out.push(this.#startMessage(member, conn), { to: conn, message: this.#match.state(member.id) });
     } else {
       out.push({ to: conn, message: { type: "welcome", token: member.token } }, ...this.#broadcastRoom());
     }
@@ -224,11 +244,10 @@ export class Room {
     const grid = pickGrid(this.#catalog, this.#level, this.#env.randomSeed());
     this.#state = "started";
     this.#match = new Match(grid.puzzle, grid.solution, this.#members.map((m) => m.id));
-    const state = this.#match.state();
     const out: Outgoing[] = [];
     for (const m of this.#members) {
       if (m.conn === null) continue;
-      out.push(this.#startMessage(m, m.conn), { to: m.conn, message: state });
+      out.push(this.#startMessage(m, m.conn), { to: m.conn, message: this.#match.state(m.id) });
     }
     return out;
   }
@@ -259,6 +278,13 @@ export class Room {
     }
     return out;
   }
+}
+
+/** Le seul joueur qui peut recevoir cet événement, ou `null` s'il va à tous. */
+function privateTo(ev: GameEvent): number | null {
+  if (ev.type === "placed" && ev.kind === "mine") return ev.player;
+  if (ev.type === "not_placed") return ev.player;
+  return null;
 }
 
 function error(to: string, code: RoomErrorCode): Outgoing {
@@ -297,6 +323,12 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
     case "fill":
       if (!isCount(m.cell, 0, 80) || !isCount(m.digit, 1, 9)) return null;
       return { type: "fill", cell: m.cell, digit: m.digit };
+    case "place":
+      if (!isCount(m.cell, 0, 80) || !isTrapKind(m.kind)) return null;
+      return { type: "place", cell: m.cell, kind: m.kind };
+    case "hit":
+      if (!isCount(m.ball, 1, Number.MAX_SAFE_INTEGER)) return null;
+      return { type: "hit", ball: m.ball };
     default:
       return null;
   }

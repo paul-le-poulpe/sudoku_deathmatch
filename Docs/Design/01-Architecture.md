@@ -34,15 +34,16 @@ transport.
 | Module | Contenu | Dépend de |
 | --- | --- | --- |
 | `packages/shared` | formats des messages ; réglages communs (tick, nombre de joueurs, longueur des noms, couleurs) | rien |
-| `packages/engine` | la partie : grille (cases données, cases remplies, propriétaire de chaque case), bonshommes (position, direction), fonction de déplacement `move`, remplissage, fin de partie | rien |
+| `packages/engine` | la partie : grille (cases données, cases remplies, propriétaire de chaque case), bonshommes (position, direction), fonction de déplacement `move`, remplissage, pièges et trajectoire des boules (`ballAt`), fin de partie | rien |
 | `packages/room` | salle d'attente (reprise de `Room` de Fronts of Iron, §7) et partie lancée : file des entrées ; `step()` applique les entrées, avance le moteur d'un tick et renvoie un snapshot par joueur. Tire la grille du catalogue que lui passe l'enveloppe, la transforme (`02-Grilles.md`) et garde la solution | `shared`, `engine` |
 | `packages/catalog` | catalogue des grilles des parties en ligne, avec leurs solutions, écrit par le script de `02-Grilles.md` §1. **Jamais importé par le client** | rien |
 | `client/` | page : accueil et salle d'attente en HTML ; partie affichée par Phaser (grille, bonshommes, PV, effets), clavier, prédiction de son bonhomme, interpolation des autres (§6) | `shared`, `engine`, Phaser ; `room` en solo |
 | `worker/` | page, lobby, et enveloppe Durable Object d'une partie : WebSocket, `setInterval` du tick, inscription et signaux au lobby | `room`, `shared`, `catalog` |
 | `server/` | enveloppe Node : serveur WebSocket, `setInterval`, `cloudflared`, inscription et signaux au lobby (plus tard) | `room`, `shared`, `catalog` |
 
-Le client importe `packages/engine` pour une seule raison : la fonction `move`,
-qui déplace son propre bonhomme avant que l'hôte réponde (§3, Prédiction).
+Le client importe `packages/engine` pour deux fonctions : `move`, qui déplace
+son propre bonhomme avant que l'hôte réponde (§3, Prédiction), et `ballAt`, la
+position d'une boule (§3, Pièges et projectiles).
 
 ### Où tourne chaque composant
 
@@ -81,7 +82,7 @@ Identique à Fronts of Iron (son `01-Architecture.md` §2) :
 | --- | --- | --- |
 | Où tourne la simulation | chez chaque client | à un seul endroit, l'hôte : Durable Object, Node, ou Web Worker du solo |
 | Ce qui circule | ordres (client → hôte), puis tours (hôte → clients) | entrées (client → hôte) ; positions et événements (hôte → clients) |
-| Le client | recalcule tout l'état | affiche ; ne calcule que son propre bonhomme (prédiction) et, plus tard, son contact avec les projectiles et les pièges visibles |
+| Le client | recalcule tout l'état | affiche ; ne calcule que son propre bonhomme (prédiction) et son contact avec les boules des tourelles |
 | Déterminisme entre navigateurs | obligatoire | inutile ; le moteur reste sans horloge et à hasard seedé (`CLAUDE.md`, règle 2) |
 | Reconnexion | rejoue tous les tours depuis le début | reçoit l'état courant |
 | Hashes, désynchronisation | oui | n'existent pas : il n'y a qu'une copie de la partie |
@@ -132,8 +133,11 @@ Décidé par l'auteur le 15 novembre 2026.
   des bords, provisoire, pour un client dont la position prédite est
   légèrement en avance), que la case est vide, puis compare le chiffre à la
   solution. Chiffre faux : refusé, 1 PV en moins (`00-Game.md` §1).
-- Plus tard, `hit {id}` : un projectile ou un piège visible touche son
-  bonhomme (§3, Pièges et projectiles).
+- `place {cell, kind}` : poser une mine ou une tourelle sur la case `cell`.
+  L'hôte vérifie, avec la tolérance de `fill`, que le bonhomme est sur la case,
+  qu'elle a été remplie par ce joueur et qu'elle n'a pas de piège.
+- `hit {ball}` : la boule `ball` touche son bonhomme sur son écran (§3, Pièges
+  et projectiles).
 
 ### Changements de direction rapprochés
 
@@ -172,8 +176,11 @@ l'hôte calculent la même trajectoire, tick par tick, et la prédiction n'a rie
 - `events {tick, events}`, seulement pour un tick où il s'est passé quelque
   chose qui ne se déduit pas des positions : case remplie (case, chiffre,
   joueur) ; chiffre refusé (joueur, case, PV restants) ; bonhomme éliminé
-  (joueur) ; fin de partie (classement) ; plus tard pièges posés (une mine :
-  à son seul poseur), tirs annoncés, explosions (§3, Pièges et projectiles).
+  (joueur) ; fin de partie (classement) ; piège posé (`placed`, une mine à son
+  seul poseur), pose refusée (`not_placed`, au seul joueur), mine qui explose
+  (`exploded`), boule qui apparaît (`ball`), part (`launched`), touche
+  (`ball_hit`) ou disparaît faute de cible (`ball_gone`) (§3, Pièges et
+  projectiles).
   **Doit arriver** : un événement perdu ne se rattrape pas au message suivant.
 - `state {…}` : état complet de la partie (grille sans la solution, joueurs et
   leurs PV, cases remplies et leur propriétaire), au lancement et à chaque
@@ -266,8 +273,8 @@ d'environ 100 ms plus un demi aller-retour. Les bonshommes ne se frappent pas
 
 ### Pièges et projectiles : qui détecte le contact
 
-Décidé par l'auteur le 15 novembre 2026. Pas encore implémenté : les pièges ne
-sont pas dans la version 1 (règles : `03-Pieges.md`).
+Décidé par l'auteur le 15 novembre 2026, implémenté le même jour (règles :
+`03-Pieges.md` ; choix d'implémentation : §9).
 
 Ce qui doit être juste (`03-Pieges.md` §1) : sur l'écran d'un joueur, le
 contact entre **son** bonhomme et les projectiles et les pièges qu'il voit.
@@ -444,9 +451,9 @@ Propre à ce jeu :
   snapshots (§3), la grille et ses couleurs, les PV en haut de la grille.
 - **Clavier** : l'état des flèches est lu une fois par tick (§3) ; jamais un
   `input` par image ni par événement clavier.
-- **Plus tard, tirs** : annoncés une fois par un événement, leur trajectoire
-  est calculée par chaque client (§3, Pièges et projectiles) ; ils n'entrent
-  pas dans les snapshots. Des zombies (idée non décidée, `00-Game.md` §3), qui
+- **Tirs** : annoncés une fois par un événement, leur trajectoire est calculée
+  par chaque client (§3, Pièges et projectiles) ; ils n'entrent pas dans les
+  snapshots. Des zombies (idée non décidée, `00-Game.md` §3), qui
   ne suivraient pas une trajectoire fixée d'avance, y entreraient : avec
   beaucoup d'objets, un format binaire deviendra peut-être utile.
 
@@ -493,8 +500,8 @@ copié puis adapté ; les deux dépôts évoluent ensuite séparément.
 
 Provisoire, à régler en jouant : tick, unités, vitesse, délai d'interpolation,
 répartition de la correction de prédiction, tolérance de remplissage, taille de
-la file d'entrées de l'hôte ; plus tard, marge du contrôle des contacts par
-l'hôte (§3, Pièges et projectiles).
+la file d'entrées de l'hôte, marge du contrôle des contacts par l'hôte (§3,
+Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
 
 À décider avec l'auteur : les points ouverts de `00-Game.md` §3, de
 `02-Grilles.md` §4 (niveaux de difficulté, taille du catalogue) et de
@@ -522,6 +529,14 @@ l'hôte (§3, Pièges et projectiles).
    `CREATE_PASSWORD` (`npx wrangler secret put CREATE_PASSWORD` dans `worker/`),
    sans lequel la création de parties répond `503`. `LOBBY_SECRET` attend
    `server/`.
+4. **Fait (15 novembre 2026) : pièges** (`03-Pieges.md`, §3 Pièges et
+   projectiles). Moteur (`packages/engine/src/game.ts`, `ball.ts`), hôte
+   (`Match.place`, `Match.hit`, événements par destinataire dans `Room.step`,
+   `state` par joueur), client (barre des pièges, touches, dessin, détection
+   des boules dans `session.ts`). Vérifié : typecheck, build du client et du
+   Worker, absence du catalogue en ligne dans `client/dist`. Pas vérifié : une
+   partie jouée. En solo, une tourelle ne tire jamais et une mine n'explose
+   jamais : il n'y a pas d'adversaire.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -544,6 +559,33 @@ l'hôte (§3, Pièges et projectiles).
   arrête sa minuterie de ticks.
 - **Accueil et salle** : écrits à neuf d'après celui de Fronts of Iron, sans sa
   reprise automatique au chargement (« Reprendre » dans la liste).
+- **Instant des dangers** (`session.ts`) : à chaque snapshot dont l'`ack`
+  désigne une entrée connue, le client calcule `tickOffset` = tick de l'hôte
+  − tick local (le tick local où il a appliqué l'entrée, plus `since`). Pièges
+  et boules sont dessinés au tick de l'hôte `tick local − 1 + fraction +
+  tickOffset`, celui de son bonhomme dessiné. Pour l'avoir vite, la première
+  entrée d'une partie (ou d'une reconnexion) est envoyée même si aucune touche
+  n'a changé. Sans `tickOffset`, le client ne teste aucun contact, et dessine
+  au tick estimé de l'hôte plus 2.
+- **Trajectoire d'une boule** (`packages/engine/src/ball.ts`) : direction en
+  millièmes calculée par l'hôte au départ, position `centre + direction ×
+  BALL_SPEED × (tick − départ) / 1000` arrondie vers zéro ; une boule
+  entièrement sortie de la grille disparaît chez chacun sans événement.
+- **Contact** : centres à moins de 0,35 case (rayon de la boule 0,15, du
+  bonhomme 0,2). Le client teste à chaque tick local sa position dessinée ;
+  l'hôte compte lui-même un contact sous 0,05 case (marge de 0,3 case). Une
+  boule ne touche qu'une fois : elle disparaît.
+- **Ordre d'un tick de l'hôte** : déplacements, remplissages, poses, contacts
+  signalés, départs puis apparitions des boules, contrôle des boules, mines,
+  fin de partie.
+- **Limites par tick et par joueur** : 2 poses, 4 contacts signalés (comme les
+  4 remplissages).
+- **Canon** : dessiné vers le bonhomme adverse le plus proche tel que ce client
+  l'affiche, et dans la direction de la boule pendant les 6 ticks qui suivent
+  son départ.
+- **Barre des pièges** : boutons grisés quand la case sous le bonhomme n'est
+  pas à lui ou a déjà un piège, relus toutes les 150 ms ; un clic ne prend pas
+  le focus du clavier.
 
 ## 10. Pièges
 

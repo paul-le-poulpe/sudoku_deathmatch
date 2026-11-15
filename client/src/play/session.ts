@@ -1,10 +1,20 @@
 // La partie côté client, sans affichage (01-Architecture §3 et §6) : ce que l'hôte a envoyé (`state`,
-// `snapshot`, `events`), la prédiction de son propre bonhomme, l'interpolation des autres. Phaser lit ce
-// module à chaque image (scene.ts) ; il ne décide d'aucune règle : cases, PV et éliminations viennent
-// des événements de l'hôte.
+// `snapshot`, `events`), la prédiction de son propre bonhomme, l'interpolation des autres, les pièges et
+// les boules (03-Pieges). Phaser lit ce module à chaque image (scene.ts) ; il ne décide d'aucune règle :
+// cases, PV et éliminations viennent des événements de l'hôte. Seule exception : le contact entre son
+// bonhomme et une boule, que le client détecte et signale (01-Architecture §3, Pièges et projectiles).
 
-import { CELL, cellAt, move } from "@sudoku-deathmatch/engine";
-import { TICK_MS, type ClientMessage, type GameEvent, type Level, type RankEntry, type ServerMessage, type StartPlayer } from "@sudoku-deathmatch/shared";
+import { BALL_CHARGE_TICKS, BALL_CONTACT, CELL, ballAt, ballOut, cellAt, cellCenter, move, within } from "@sudoku-deathmatch/engine";
+import {
+  TICK_MS,
+  type ClientMessage,
+  type GameEvent,
+  type Level,
+  type RankEntry,
+  type ServerMessage,
+  type StartPlayer,
+  type TrapKind,
+} from "@sudoku-deathmatch/shared";
 
 /** Les autres bonshommes sont affichés ce nombre de ticks dans le passé (100 ms, provisoire). */
 const INTERP_TICKS = 2;
@@ -16,8 +26,10 @@ const SMOOTH_MS = 80;
 const SNAP_DISTANCE = 2 * CELL;
 /** Snapshots gardés pour l'interpolation et l'estimation de l'horloge de l'hôte. */
 const KEPT_SNAPSHOTS = 40;
-/** Un remplissage sans réponse de l'hôte après ce délai n'est plus affiché « en attente ». */
+/** Un remplissage ou une pose sans réponse de l'hôte après ce délai n'est plus attendu. */
 const PENDING_MS = 3000;
+/** Après un tir, le canon dessiné reste dans la direction de la boule pendant ce nombre de ticks. */
+const CANNON_HOLD_TICKS = 6;
 
 export interface ViewPlayer {
   readonly id: number;
@@ -32,15 +44,53 @@ export interface ViewPlayer {
   readonly y: number;
 }
 
+/** Un piège connu de ce client : les tourelles de tous, ses propres mines (01-Architecture §3, Pièges cachés). */
+export interface ClientTrap {
+  readonly kind: TrapKind;
+  readonly owner: number;
+}
+
+/** Un piège à dessiner ; (`ux`, `uy`) : direction du canon d'une tourelle, vecteur de longueur 1. */
+export interface ViewTrap {
+  readonly cell: number;
+  readonly kind: TrapKind;
+  readonly owner: number;
+  readonly ux: number;
+  readonly uy: number;
+}
+
+/** Une boule à dessiner, en unités ; `progress` : avancement de la seconde d'attente, de 0 à 1. */
+export interface ViewBall {
+  readonly x: number;
+  readonly y: number;
+  readonly owner: number;
+  readonly charging: boolean;
+  readonly progress: number;
+}
+
 /** Ce que l'affichage doit animer, dans l'ordre ; Phaser vide la liste à chaque image. */
 export type Fx =
   | { readonly kind: "filled"; readonly cell: number; readonly player: number }
   | { readonly kind: "refused"; readonly cell: number; readonly player: number }
-  | { readonly kind: "eliminated"; readonly player: number; readonly x: number; readonly y: number };
+  | { readonly kind: "eliminated"; readonly player: number; readonly x: number; readonly y: number }
+  | { readonly kind: "placed"; readonly cell: number; readonly player: number }
+  /** Une mine explose sous `player`. */
+  | { readonly kind: "exploded"; readonly cell: number; readonly player: number }
+  /** Une boule de `player` touche `victim` en (x, y), en unités. */
+  | { readonly kind: "pop"; readonly x: number; readonly y: number; readonly player: number; readonly victim: number };
 
 interface Snapshot {
   readonly tick: number;
   readonly players: ReadonlyMap<number, readonly [number, number]>;
+}
+
+interface ClientBall {
+  readonly cell: number;
+  readonly owner: number;
+  readonly launch: number;
+  dx: number;
+  dy: number;
+  launched: boolean;
 }
 
 type StartMessage = Extract<ServerMessage, { type: "start" }>;
@@ -61,6 +111,8 @@ export class PlaySession {
   ranking: readonly RankEntry[] | null = null;
   /** Vrai dès le premier `state`. */
   ready = false;
+  /** Pièges connus, par case. */
+  readonly traps = new Map<number, ClientTrap>();
 
   /** Remplissages envoyés, sans réponse de l'hôte : case → chiffre et heure d'envoi. */
   readonly pending = new Map<number, { readonly digit: number; readonly at: number }>();
@@ -78,6 +130,9 @@ export class PlaySession {
   /** Heure locale (ms) moins l'heure de l'hôte (tick × TICK_MS), au plus petit des derniers snapshots. */
   #offset = 0;
   readonly #lastSeen = new Map<number, readonly [number, number]>();
+  readonly #balls = new Map<number, ClientBall>();
+  /** Poses envoyées, sans réponse de l'hôte : case → heure d'envoi. */
+  readonly #placing = new Map<number, number>();
 
   // Prédiction de son bonhomme.
   #localTick = 0;
@@ -90,6 +145,11 @@ export class PlaySession {
   #seq = 0;
   #sentDir = 0;
   #smooth: [number, number] = [0, 0];
+  /**
+   * Tick de l'hôte moins tick local : la position prédite au tick local L est celle que l'hôte donnera au
+   * bonhomme à son tick L + #tickOffset. Connu dès que l'hôte a appliqué une entrée (`ack`).
+   */
+  #tickOffset: number | null = null;
 
   constructor(start: StartMessage, send: (msg: ClientMessage) => void) {
     this.you = start.you;
@@ -135,11 +195,19 @@ export class PlaySession {
         this.#sentDir = p.dir;
       }
     }
+    this.traps.clear();
+    for (const [cell, kind, player] of s.traps) this.traps.set(cell, { kind, owner: player });
+    this.#balls.clear();
+    for (const [ball, cell, player, launch, dx, dy] of s.balls) {
+      this.#balls.set(ball, { cell, owner: player, launch, dx, dy, launched: dx !== 0 || dy !== 0 });
+    }
+    this.#placing.clear();
     this.ranking = s.ranking;
     this.#snaps.length = 0;
     this.#snaps.push({ tick: s.tick, players: positions });
     this.#seqTick.clear();
     this.#seq = 0;
+    this.#tickOffset = null;
     this.#smooth = [0, 0];
     this.ready = true;
     this.onChange?.();
@@ -159,16 +227,16 @@ export class PlaySession {
     if (this.#snaps.length > KEPT_SNAPSHOTS) this.#snaps.shift();
 
     const me = players.get(this.you);
-    if (me !== undefined) this.#reconcile(me, s.ack[0], s.ack[1]);
+    if (me !== undefined) this.#reconcile(me, s.ack[0], s.ack[1], s.tick);
   }
 
   /**
    * L'hôte a appliqué l'entrée `seq` au tick local où le client l'a appliquée (`#seqTick`) ; `since` ticks
-   * plus tard, il a mis le bonhomme en `host`. On repart de là et on rejoue les directions locales
-   * suivantes : le résultat est où le bonhomme devrait être maintenant. L'écart avec la prédiction est
-   * effacé à l'écran en quelques images (01-Architecture §3, Prédiction).
+   * plus tard, à son tick `tick`, il a mis le bonhomme en `host`. On repart de là et on rejoue les
+   * directions locales suivantes : le résultat est où le bonhomme devrait être maintenant. L'écart avec la
+   * prédiction est effacé à l'écran en quelques images (01-Architecture §3, Prédiction).
    */
-  #reconcile(host: readonly [number, number], seq: number, since: number): void {
+  #reconcile(host: readonly [number, number], seq: number, since: number, tick: number): void {
     let corrected: [number, number];
     if (seq === 0) {
       // Aucune entrée appliquée par l'hôte : si on en a envoyé, elles sont en route.
@@ -179,6 +247,7 @@ export class PlaySession {
       if (applied === undefined) return;
       for (const s of this.#seqTick.keys()) if (s < seq) this.#seqTick.delete(s);
       const hostTick = applied + since;
+      this.#tickOffset = tick - hostTick;
       corrected = [host[0], host[1]];
       if (hostTick < this.#localTick && this.#localTick - hostTick < HISTORY) {
         for (let t = hostTick + 1; t <= this.#localTick; t++) corrected = move(corrected[0], corrected[1], this.#dirAt[t % HISTORY]!);
@@ -229,6 +298,53 @@ export class PlaySession {
         case "ended":
           this.ranking = ev.ranking;
           break;
+        case "placed":
+          this.traps.set(ev.cell, { kind: ev.kind, owner: ev.player });
+          this.fx.push({ kind: "placed", cell: ev.cell, player: ev.player });
+          if (ev.player === this.you) {
+            this.#placing.delete(ev.cell);
+            this.#say(ev.kind === "mine" ? "Mine posée : les autres ne la voient pas." : "Tourelle posée : première boule dans 1 s.", now);
+          }
+          break;
+        case "not_placed":
+          if (ev.player === this.you) {
+            this.#placing.delete(ev.cell);
+            this.#say("Piège refusé : votre bonhomme n'est plus sur la case.", now);
+          }
+          break;
+        case "exploded":
+          this.traps.delete(ev.cell);
+          this.hp.set(ev.player, ev.hp);
+          this.fx.push({ kind: "exploded", cell: ev.cell, player: ev.player });
+          if (ev.player === this.you) this.#say("Une mine : un PV de moins.", now);
+          break;
+        case "ball":
+          this.#balls.set(ev.ball, { cell: ev.cell, owner: ev.player, launch: ev.launch, dx: 0, dy: 0, launched: false });
+          break;
+        case "launched": {
+          const b = this.#balls.get(ev.ball);
+          if (b !== undefined) {
+            b.dx = ev.dx;
+            b.dy = ev.dy;
+            b.launched = true;
+          }
+          break;
+        }
+        case "ball_hit": {
+          this.hp.set(ev.player, ev.hp);
+          const b = this.#balls.get(ev.ball);
+          if (b !== undefined) {
+            // Encore là : pas détecté par ce client (autre bonhomme, ou contrôle de l'hôte).
+            this.#balls.delete(ev.ball);
+            const at = ev.player === this.you ? this.#pos : ballAt(b.cell, b.dx, b.dy, b.launch, this.#hazardTick(now));
+            this.fx.push({ kind: "pop", x: at[0], y: at[1], player: b.owner, victim: ev.player });
+          }
+          if (ev.player === this.you) this.#say("Touché par une boule : un PV de moins.", now);
+          break;
+        }
+        case "ball_gone":
+          this.#balls.delete(ev.ball);
+          break;
       }
     }
     this.onChange?.();
@@ -250,13 +366,24 @@ export class PlaySession {
     const decay = Math.exp(-dt / SMOOTH_MS);
     this.#smooth = [this.#smooth[0] * decay, this.#smooth[1] * decay];
     for (const [cell, p] of this.pending) if (now - p.at > PENDING_MS) this.pending.delete(cell);
+    for (const [cell, at] of this.#placing) if (now - at > PENDING_MS) this.#placing.delete(cell);
+    // Une boule sortie de la grille disparaît : chaque client le calcule, l'hôte n'envoie rien.
+    const t = this.#hazardTick(now);
+    for (const [id, b] of this.#balls) {
+      if (!b.launched) continue;
+      const [x, y] = ballAt(b.cell, b.dx, b.dy, b.launch, t);
+      if (ballOut(x, y)) this.#balls.delete(id);
+    }
   }
 
-  /** Un tick local : la direction est lue, envoyée si elle a changé, et appliquée tout de suite. */
+  /**
+   * Un tick local : la direction est lue, envoyée si elle a changé, et appliquée tout de suite. La première
+   * est envoyée même sans changement, pour que l'`ack` de l'hôte donne vite #tickOffset.
+   */
   #tick(dir: number): void {
     const active = this.youAlive && this.ranking === null;
     const d = active ? dir : 0;
-    if (active && d !== this.#sentDir) {
+    if (active && (d !== this.#sentDir || this.#seq === 0)) {
       this.#seq++;
       this.#send({ type: "input", seq: this.#seq, dirs: [d] });
       this.#seqTick.set(this.#seq, this.#localTick + 1);
@@ -265,7 +392,40 @@ export class PlaySession {
     this.#localTick++;
     this.#dirAt[this.#localTick % HISTORY] = d;
     this.#prev = this.#pos;
-    if (active) this.#pos = move(this.#pos[0], this.#pos[1], d);
+    if (active) {
+      this.#pos = move(this.#pos[0], this.#pos[1], d);
+      this.#detectHits();
+    }
+  }
+
+  /**
+   * Contact entre son bonhomme, à la position dessinée, et les boules adverses parties, au même instant de
+   * la partie (01-Architecture §3, Pièges et projectiles) : la boule disparaît de l'écran et `hit` part.
+   * Sans #tickOffset, rien n'est testé ; le contrôle de l'hôte s'applique.
+   */
+  #detectHits(): void {
+    if (this.#tickOffset === null) return;
+    const t = this.#localTick + this.#tickOffset;
+    const x = this.#pos[0] + this.#smooth[0];
+    const y = this.#pos[1] + this.#smooth[1];
+    for (const [id, b] of this.#balls) {
+      if (!b.launched || b.owner === this.you || t <= b.launch) continue;
+      const [bx, by] = ballAt(b.cell, b.dx, b.dy, b.launch, t);
+      if (!within(bx, by, x, y, BALL_CONTACT)) continue;
+      this.#balls.delete(id);
+      this.#send({ type: "hit", ball: id });
+      this.fx.push({ kind: "pop", x: bx, y: by, player: b.owner, victim: this.you });
+    }
+  }
+
+  /**
+   * Tick de l'hôte, fractionnaire, où en est son bonhomme tel qu'il est dessiné : pièges et boules sont
+   * dessinés à cet instant, pas dans le passé comme les autres bonshommes. Avant le premier `ack` : tick
+   * estimé de l'hôte plus l'avance habituelle de la prédiction (provisoire).
+   */
+  #hazardTick(now: number): number {
+    if (this.#tickOffset === null) return (now - this.#offset) / TICK_MS + 2;
+    return this.#localTick - 1 + this.#acc / TICK_MS + this.#tickOffset;
   }
 
   /** Les bonshommes à afficher maintenant : le sien prédit, les autres interpolés dans le passé. */
@@ -290,6 +450,48 @@ export class PlaySession {
         y: at[1],
       };
     });
+  }
+
+  /**
+   * Pièges et boules à dessiner maintenant. Le canon d'une tourelle est décoratif : il vise le bonhomme
+   * adverse le plus proche tel que ce client le dessine (`players`), et suit la boule qui vient de partir.
+   */
+  hazards(now: number, players: readonly ViewPlayer[]): { traps: ViewTrap[]; balls: ViewBall[] } {
+    const t = this.#hazardTick(now);
+    const balls: ViewBall[] = [];
+    const shots = new Map<number, ClientBall>();
+    for (const b of this.#balls.values()) {
+      const [x, y] = b.launched ? ballAt(b.cell, b.dx, b.dy, b.launch, t) : cellCenter(b.cell);
+      const progress = b.launched ? 1 : Math.min(1, Math.max(0, (t - (b.launch - BALL_CHARGE_TICKS)) / BALL_CHARGE_TICKS));
+      balls.push({ x, y, owner: b.owner, charging: !b.launched, progress });
+      if (b.launched && t - b.launch < CANNON_HOLD_TICKS) shots.set(b.cell, b);
+    }
+    const traps: ViewTrap[] = [];
+    for (const [cell, trap] of this.traps) {
+      let ux = 0;
+      let uy = -1;
+      if (trap.kind === "turret") {
+        const shot = shots.get(cell);
+        if (shot !== undefined) {
+          ux = shot.dx / 1000;
+          uy = shot.dy / 1000;
+        } else {
+          const [cx, cy] = cellCenter(cell);
+          let best = Infinity;
+          for (const p of players) {
+            if (!p.alive || p.id === trap.owner) continue;
+            const d = (p.x - cx) * (p.x - cx) + (p.y - cy) * (p.y - cy);
+            if (d === 0 || d >= best) continue;
+            best = d;
+            const len = Math.sqrt(d);
+            ux = (p.x - cx) / len;
+            uy = (p.y - cy) / len;
+          }
+        }
+      }
+      traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy });
+    }
+    return { traps, balls };
   }
 
   #interpolated(id: number, renderTick: number): readonly [number, number] {
@@ -328,6 +530,24 @@ export class PlaySession {
     if (this.pending.has(cell)) return;
     this.pending.set(cell, { digit, at: now });
     this.#send({ type: "fill", cell, digit });
+  }
+
+  /** Un piège peut être demandé sur la case sous son bonhomme : remplie par lui, sans piège (03-Pieges §1). */
+  canPlace(): boolean {
+    if (!this.ready || this.ranking !== null || !this.youAlive) return false;
+    const cell = this.myCell();
+    return this.owner[cell] === this.you && !this.traps.has(cell) && !this.#placing.has(cell);
+  }
+
+  /** Touche ou bouton d'un piège : le poser sur la case sous son bonhomme. L'hôte décide. */
+  pressTrap(kind: TrapKind, now: number): void {
+    if (!this.ready || this.ranking !== null || !this.youAlive) return;
+    const cell = this.myCell();
+    if (this.owner[cell] !== this.you) return this.#say("Un piège se pose sur une case que vous avez remplie.", now);
+    if (this.traps.has(cell)) return this.#say("Cette case a déjà un piège.", now);
+    if (this.#placing.has(cell)) return;
+    this.#placing.set(cell, now);
+    this.#send({ type: "place", cell, kind });
   }
 
   #say(text: string, now: number): void {

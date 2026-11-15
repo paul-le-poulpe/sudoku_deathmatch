@@ -2,13 +2,16 @@
 // une direction appliquée par tick, remplissages dans l'ordre d'arrivée, moteur, snapshots et événements.
 // Comme `Room`, elle ne connaît ni horloge ni réseau : l'enveloppe appelle `step` à chaque tick.
 
-import { START_HP, createGame, step, type FillRequest, type Game } from "@sudoku-deathmatch/engine";
-import type { GameEvent, PlayerState, ServerMessage } from "@sudoku-deathmatch/shared";
+import { START_HP, createGame, step, type FillRequest, type Game, type HitRequest, type PlaceRequest } from "@sudoku-deathmatch/engine";
+import type { GameEvent, PlayerState, ServerMessage, TrapKind } from "@sudoku-deathmatch/shared";
 
 /** Entrées en attente au-delà desquelles l'hôte ne garde que la dernière (01-Architecture §3, provisoire). */
 export const MAX_QUEUED_INPUTS = 2;
 /** Remplissages d'un joueur acceptés dans un même tick ; les suivants sont ignorés. */
 export const MAX_FILLS_PER_TICK = 4;
+/** Poses de piège et contacts signalés d'un joueur acceptés dans un même tick. */
+export const MAX_PLACES_PER_TICK = 2;
+export const MAX_HITS_PER_TICK = 4;
 
 interface Queued {
   readonly seq: number;
@@ -24,16 +27,22 @@ interface Track {
   appliedSeq: number;
   appliedTick: number;
   fillsThisTick: number;
+  placesThisTick: number;
+  hitsThisTick: number;
 }
 
 export class Match {
   readonly game: Game;
   readonly #tracks = new Map<number, Track>();
   #fills: FillRequest[] = [];
+  #places: PlaceRequest[] = [];
+  #hits: HitRequest[] = [];
 
   constructor(puzzle: readonly number[], solution: readonly number[], playerIds: readonly number[]) {
     this.game = createGame(puzzle, solution, playerIds);
-    for (const id of playerIds) this.#tracks.set(id, { queue: [], received: 0, appliedSeq: 0, appliedTick: 0, fillsThisTick: 0 });
+    for (const id of playerIds) {
+      this.#tracks.set(id, { queue: [], received: 0, appliedSeq: 0, appliedTick: 0, fillsThisTick: 0, placesThisTick: 0, hitsThisTick: 0 });
+    }
   }
 
   get ended(): boolean {
@@ -77,12 +86,28 @@ export class Match {
     this.#fills.push({ player, cell, digit });
   }
 
-  /** Un tick : une entrée par joueur sortie de sa file, les remplissages reçus, puis le moteur. */
+  place(player: number, cell: number, kind: TrapKind): void {
+    const track = this.#tracks.get(player);
+    if (track === undefined || track.placesThisTick >= MAX_PLACES_PER_TICK) return;
+    track.placesThisTick++;
+    this.#places.push({ player, cell, kind });
+  }
+
+  hit(player: number, ball: number): void {
+    const track = this.#tracks.get(player);
+    if (track === undefined || track.hitsThisTick >= MAX_HITS_PER_TICK) return;
+    track.hitsThisTick++;
+    this.#hits.push({ player, ball });
+  }
+
+  /** Un tick : une entrée par joueur sortie de sa file, les remplissages, poses et contacts reçus, puis le moteur. */
   step(): GameEvent[] {
     const dirs = new Map<number, number>();
     const tick = this.game.tick + 1;
     for (const [player, track] of this.#tracks) {
       track.fillsThisTick = 0;
+      track.placesThisTick = 0;
+      track.hitsThisTick = 0;
       const next = track.queue.shift();
       if (next === undefined) continue;
       dirs.set(player, next.dir);
@@ -90,8 +115,12 @@ export class Match {
       track.appliedTick = tick;
     }
     const fills = this.#fills;
+    const places = this.#places;
+    const hits = this.#hits;
     this.#fills = [];
-    return step(this.game, { dirs, fills });
+    this.#places = [];
+    this.#hits = [];
+    return step(this.game, { dirs, fills, places, hits });
   }
 
   /** Positions des bonshommes non éliminés, communes à tous les destinataires. */
@@ -106,13 +135,18 @@ export class Match {
     return [track.appliedSeq, this.game.tick - track.appliedTick];
   }
 
-  /** L'état complet, sans la solution (message `state`). */
-  state(): Extract<ServerMessage, { type: "state" }> {
+  /**
+   * L'état complet pour le joueur `recipient`, sans la solution ni les mines des autres joueurs
+   * (message `state`, 01-Architecture §3, Pièges cachés).
+   */
+  state(recipient: number): Extract<ServerMessage, { type: "state" }> {
     const g = this.game;
     const givens = Array.from(g.owner, (o, i) => (o === -1 ? g.digits[i]! : 0)).join("");
     const cells: [number, number, number][] = [];
     for (let i = 0; i < 81; i++) if (g.owner[i]! > 0) cells.push([i, g.digits[i]!, g.owner[i]!]);
     const players: PlayerState[] = g.players.map((p) => ({ id: p.id, x: p.x, y: p.y, dir: p.dir, hp: p.hp, alive: p.alive, score: p.score }));
-    return { type: "state", tick: g.tick, givens, cells, players, hpMax: START_HP, ranking: g.ranking };
+    const traps = g.traps.filter((t) => t.kind !== "mine" || t.owner === recipient).map((t): [number, TrapKind, number] => [t.cell, t.kind, t.owner]);
+    const balls = g.balls.map((b): [number, number, number, number, number, number] => [b.id, b.cell, b.owner, b.launch, b.dx, b.dy]);
+    return { type: "state", tick: g.tick, givens, cells, players, hpMax: START_HP, ranking: g.ranking, traps, balls };
   }
 }

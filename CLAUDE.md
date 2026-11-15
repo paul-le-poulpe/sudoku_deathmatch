@@ -34,7 +34,7 @@ inventée.
 - `Docs/Design/02-Grilles.md` — grilles : catalogue pré-généré, transformé au
   lancement, mesure de la difficulté ; fait foi pour ce domaine.
 - `Docs/Design/03-Pieges.md` — pièges posés sur ses cases : pose, mine,
-  tourelle ; fait foi pour ce domaine ; pas dans la version 1.
+  tourelle ; fait foi pour ce domaine.
 
 ---
 
@@ -48,7 +48,7 @@ Tout existe (première version, 15 novembre 2026), sauf `server/` :
 ```
 packages/
   shared/    formats des messages et réglages communs (tick, joueurs, noms, couleurs)
-  engine/    la partie : grille, bonshommes, déplacement, remplissage, fin de partie
+  engine/    la partie : grille, bonshommes, déplacement, remplissage, pièges, fin de partie
   room/      salle d'attente et partie côté hôte : entrées → moteur → snapshots ;
              tire la grille du catalogue, la transforme, garde la solution
   catalog/   grilles des parties en ligne et leurs solutions (02-Grilles.md) ;
@@ -133,7 +133,7 @@ partagée par l'hôte et par la prédiction du client : elle calcule en entiers.
 Le client n'envoie que des entrées (direction, case et chiffre à remplir).
 L'hôte calcule les positions, accepte ou refuse les remplissages, et envoie le
 résultat. Un client ne décide jamais de sa position ni d'une case remplie.
-Seule exception (plus tard) : le client signale lui-même qu'un projectile ou
+Seule exception : le client signale lui-même qu'un projectile ou
 un piège visible touche son propre bonhomme (un signalement ne fait du tort
 qu'à lui), et l'hôte détecte aussi les contacts évidents, pour qu'un client qui
 ne signale rien ne soit pas invincible. Un piège caché (la mine) est détecté

@@ -1,8 +1,15 @@
 // Le clavier pendant une partie. Les flèches (et ZQSD/WASD par la position physique des touches,
 // `KeyboardEvent.code`) donnent une direction, lue une fois par tick par la session (01-Architecture §3) ;
-// les chiffres 1 à 9 (rangée du haut ou pavé numérique) appellent `onDigit` à l'appui.
+// les chiffres 1 à 9 (rangée du haut ou pavé numérique) appellent `onDigit` à l'appui ; les touches à
+// gauche et à droite de Z (A et E en AZERTY, Q et E en QWERTY) appellent `onTrap` (03-Pieges §1).
 
 import { DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP } from "@sudoku-deathmatch/engine";
+import type { TrapKind } from "@sudoku-deathmatch/shared";
+
+const TRAP: Readonly<Record<string, TrapKind>> = {
+  KeyQ: "mine",
+  KeyE: "turret",
+};
 
 const DIRECTION: Readonly<Record<string, number>> = {
   ArrowUp: DIR_UP,
@@ -18,12 +25,19 @@ const DIRECTION: Readonly<Record<string, number>> = {
 export class Keyboard {
   readonly #down = new Set<string>();
   onDigit: ((digit: number) => void) | null = null;
+  onTrap: ((kind: TrapKind) => void) | null = null;
 
   readonly #keydown = (e: KeyboardEvent): void => {
     if (isTyping(e.target)) return;
     if (e.code in DIRECTION) {
       this.#down.add(e.code);
       e.preventDefault();
+      return;
+    }
+    const trap = TRAP[e.code];
+    if (trap !== undefined && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      if (!e.repeat) this.onTrap?.(trap);
       return;
     }
     const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);

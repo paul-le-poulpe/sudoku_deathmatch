@@ -3,8 +3,11 @@
 Jeu multijoueur dans le navigateur, de 2 à 4 joueurs. L'arène est une grille de
 Sudoku : chaque joueur déplace un bonhomme sur la grille et écrit des chiffres
 dans les cases. Un chiffre juste colore la case de sa couleur ; un chiffre faux
-coûte un point de vie, et à 0 le bonhomme est éliminé. La partie finit quand la
-grille est pleine ou qu'il ne reste qu'un bonhomme.
+coûte un point de vie, et à 0 le bonhomme est éliminé. Sur une case qu'il a
+remplie, un joueur peut poser un piège : une mine, que les autres ne voient
+pas, ou une tourelle, qui tire des boules lentes sur l'adversaire le plus
+proche. La partie finit quand la grille est pleine ou qu'il ne reste qu'un
+bonhomme.
 
 En développement : les règles sont dans `Docs/Design/00-Game.md`, et les
 valeurs de réglage (vitesse, niveaux…) sont des valeurs d'essai.
@@ -60,6 +63,10 @@ au Worker.
 | --- | --- |
 | Flèches, ou ZQSD | se déplacer (deux touches : en diagonale) |
 | 1 à 9 | écrire ce chiffre dans la case sous le bonhomme |
+| A (Q en QWERTY) | poser une mine sur la case sous le bonhomme, s'il l'a remplie |
+| E | poser une tourelle sur la case sous le bonhomme, s'il l'a remplie |
+
+En solo, les pièges se posent mais ne font rien : il n'y a pas d'adversaire.
 
 ## Mise en ligne
 

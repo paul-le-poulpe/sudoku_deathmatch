@@ -4,7 +4,9 @@ Ce qu'un joueur pose sur les cases qu'il a remplies pour gêner les autres.
 Fait foi pour ce domaine (`00-Game.md` renvoie ici). Qui détecte un contact,
 et ce qui passe par le réseau : `01-Architecture.md` §3, Pièges et projectiles.
 
-Pas dans la version 1 : rien de ce document n'est implémenté.
+Implémenté le 15 novembre 2026, après la version 1, avec les dessins par
+défaut de la maquette : mine « carré », tourelle « anneau ». Réglages :
+`packages/engine/src/config.ts`.
 
 Maquette (15 novembre 2026) : artifact « Sudoku Deathmatch — pièges » (démo
 jouable, trois dessins de mine, trois dessins de tourelle). Seules les règles
@@ -31,6 +33,9 @@ Décidé par l'auteur le 15 novembre 2026.
 Provisoire :
 - Un piège n'a aucun effet sur son poseur, et une tourelle ne vise jamais son
   poseur.
+- Les pièges d'un joueur éliminé restent actifs.
+- En solo, il n'y a pas d'adversaire : une tourelle ne fait apparaître aucune
+  boule, une mine n'explose jamais.
 - Pas d'autre limite qu'un piège par case, pas de coût.
 - Touches : en plus des boutons, la touche à gauche de Z (A en AZERTY, Q en
   QWERTY, `KeyQ`) pose une mine, celle à droite de Z (E, `KeyE`) une tourelle.
@@ -52,8 +57,8 @@ Décidé par l'auteur le 15 novembre 2026 :
 Provisoire :
 - La mine explose quand le centre d'un bonhomme adverse entre dans la case.
 - Après l'explosion, la case peut recevoir un autre piège.
-- Dessin : à choisir parmi les trois de la maquette (carré, losange, coins).
-  Le carré se confond avec le cadre qui marque la case de son propre
+- Dessin : le carré de la maquette (implémenté), parmi trois (carré, losange,
+  coins). Le carré se confond avec le cadre qui marque la case de son propre
   bonhomme (même couleur, 2 px du bord), le losange et les coins non.
 
 ## 3. La tourelle
@@ -82,7 +87,10 @@ Provisoire :
 - Une boule qui touche un bonhomme adverse lui enlève 1 PV et disparaît. Elle
   disparaît aussi au bord de la grille ; elle passe par-dessus les cases et
   les autres pièges.
-- Dessin : à choisir parmi les trois de la maquette (anneau, socle, plein).
+- Une tourelle sans adversaire non éliminé ne fait pas apparaître de boule ;
+  une boule qui n'a plus de cible au moment de partir disparaît.
+- Dessin : l'anneau de la maquette (implémenté), parmi trois (anneau, socle,
+  plein).
 
 ## 4. Points ouverts
 

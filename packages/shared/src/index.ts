@@ -94,6 +94,16 @@ export function cloudflareGamePath(id: string): string {
   return `/api/games/${encodeURIComponent(id)}/ws`;
 }
 
+// ---- pièges (03-Pieges) ----
+
+/** `mine` : vue par son seul poseur ; `turret` : vue par tous, tire des boules. */
+export const TRAP_KINDS = ["mine", "turret"] as const;
+export type TrapKind = (typeof TRAP_KINDS)[number];
+
+export function isTrapKind(value: unknown): value is TrapKind {
+  return typeof value === "string" && (TRAP_KINDS as readonly string[]).includes(value);
+}
+
 // ---- partie : réglages des messages ----
 
 /** Un `input` peut répéter au plus ce nombre de directions (01-Architecture §3, Transport). */
@@ -121,7 +131,14 @@ export type ClientMessage =
    */
   | { readonly type: "input"; readonly seq: number; readonly dirs: readonly number[] }
   /** Partie lancée : écrire `digit` (1 à 9) dans la case `cell` (0 à 80, ligne par ligne). */
-  | { readonly type: "fill"; readonly cell: number; readonly digit: number };
+  | { readonly type: "fill"; readonly cell: number; readonly digit: number }
+  /** Partie lancée : poser un piège sur la case `cell`, remplie par ce joueur et sans piège (03-Pieges §1). */
+  | { readonly type: "place"; readonly cell: number; readonly kind: TrapKind }
+  /**
+   * Partie lancée : sur l'écran du joueur, la boule `ball` a touché son bonhomme (01-Architecture §3,
+   * Pièges et projectiles). Ne fait de tort qu'à lui.
+   */
+  | { readonly type: "hit"; readonly ball: number };
 
 // ---- hôte → client ----
 
@@ -166,7 +183,21 @@ export type GameEvent =
   /** Remplissage ignoré : case déjà remplie, ou bonhomme trop loin de la case pour l'hôte. Aucun PV perdu. */
   | { readonly type: "ignored"; readonly cell: number; readonly player: number }
   | { readonly type: "eliminated"; readonly player: number }
-  | { readonly type: "ended"; readonly ranking: readonly RankEntry[] };
+  | { readonly type: "ended"; readonly ranking: readonly RankEntry[] }
+  /** Piège posé. Une mine n'est annoncée qu'à son poseur (01-Architecture §3, Pièges cachés). */
+  | { readonly type: "placed"; readonly cell: number; readonly kind: TrapKind; readonly player: number }
+  /** Pose refusée : bonhomme trop loin de la case, case pas à lui ou déjà piégée. Au seul joueur. */
+  | { readonly type: "not_placed"; readonly cell: number; readonly player: number }
+  /** Une mine explose sous `player`, à qui il reste `hp` PV ; elle disparaît. */
+  | { readonly type: "exploded"; readonly cell: number; readonly player: number; readonly hp: number }
+  /** Une boule apparaît au centre de la tourelle `cell`, posée par `player` ; elle part au tick `launch`. */
+  | { readonly type: "ball"; readonly ball: number; readonly cell: number; readonly player: number; readonly launch: number }
+  /** La boule part, à son tick `launch`, dans la direction (`dx`, `dy`) en millièmes (longueur ≈ 1000). */
+  | { readonly type: "launched"; readonly ball: number; readonly dx: number; readonly dy: number }
+  /** La boule touche `player`, à qui il reste `hp` PV ; elle disparaît. */
+  | { readonly type: "ball_hit"; readonly ball: number; readonly player: number; readonly hp: number }
+  /** La boule disparaît sans partir : plus aucun adversaire à viser. */
+  | { readonly type: "ball_gone"; readonly ball: number };
 
 export type RoomErrorCode =
   | "invalid_message"
@@ -208,6 +239,8 @@ export type ServerMessage =
   /**
    * État complet de la partie, sans la solution : au lancement et à la reconnexion.
    * `givens` : 81 chiffres, `0` pour une case à remplir. `cells` : cases remplies par des joueurs.
+   * `traps` : les pièges, sauf les mines des autres joueurs. `balls` : les boules en cours, `dx` et `dy`
+   * à 0 tant qu'elles ne sont pas parties.
    */
   | {
       readonly type: "state";
@@ -217,6 +250,8 @@ export type ServerMessage =
       readonly players: readonly PlayerState[];
       readonly hpMax: number;
       readonly ranking: readonly RankEntry[] | null;
+      readonly traps: readonly (readonly [cell: number, kind: TrapKind, player: number])[];
+      readonly balls: readonly (readonly [ball: number, cell: number, player: number, launch: number, dx: number, dy: number])[];
     }
   /**
    * À chaque tick. Remplaçable : un snapshot perdu est remplacé par le suivant. `players` : les bonshommes

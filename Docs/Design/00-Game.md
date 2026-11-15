@@ -9,7 +9,7 @@ Documents thématiques :
   transformé au lancement) et comment sa difficulté est mesurée ; niveaux à
   décider.
 - `03-Pieges.md` — ce qu'un joueur pose sur ses cases pour gêner les autres :
-  pose, mine, tourelle ; pas dans la version 1.
+  pose, mine, tourelle ; ajoutés après la version 1.
 
 ---
 
@@ -29,7 +29,7 @@ Décidé par l'auteur le 15 novembre 2026.
   - Chiffre juste : la case prend la couleur du joueur.
   - Chiffre faux : il est refusé, la case reste vide, et le joueur perd 1 PV.
 - **Pas de coups.** Les bonshommes ne peuvent pas se frapper.
-- **Pièges** (pas dans la version 1). Une case remplie octroie au joueur des
+- **Pièges** (ajoutés après la version 1). Une case remplie octroie au joueur des
   bonus, ou des malus pour ses adversaires : après avoir rempli une case
   correctement, le joueur peut y poser un piège (mot générique, les tourelles
   en sont), qui gêne les autres joueurs et peut leur enlever des PV. Ils
@@ -64,7 +64,7 @@ elles pourront changer ensuite.
 - **Solo** : le joueur seul sur la grille, sans bots.
 - **Pas de pause.** L'hôte peut lancer la partie sans attendre d'autres
   joueurs.
-- **Pas dans la version 1** : pièges (`03-Pieges.md`), bots.
+- **Pas dans la version 1** : pièges (ajoutés ensuite, `03-Pieges.md`), bots.
 
 Maquette jouable (15 novembre 2026) : artifact « Sudoku Deathmatch —
 maquette » (accueil, création, salle d'attente, partie). Elle n'a pas encore
