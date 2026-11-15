@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sudoku Deathmatch</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="brand">
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+          <rect width="40" height="40" rx="8" fill="#1C1917"></rect>
+          <rect x="6" y="6" width="8" height="8" rx="2" fill="#FFFFFF"></rect>
+          <rect x="16" y="6" width="8" height="8" rx="2" fill="#FFFFFF"></rect>
+          <rect x="26" y="6" width="8" height="8" rx="2" fill="#2563EB"></rect>
+          <rect x="6" y="16" width="8" height="8" rx="2" fill="#FFFFFF"></rect>
+          <rect x="16" y="16" width="8" height="8" rx="2" fill="#EA580C"></rect>
+          <rect x="26" y="16" width="8" height="8" rx="2" fill="#FFFFFF"></rect>
+          <rect x="6" y="26" width="8" height="8" rx="2" fill="#0D9488"></rect>
+          <rect x="16" y="26" width="8" height="8" rx="2" fill="#FFFFFF"></rect>
+          <rect x="26" y="26" width="8" height="8" rx="2" fill="#FFFFFF"></rect>
+        </svg>
+        <div class="brand-text">
+          <span class="brand-title">Sudoku Deathmatch</span>
+          <span id="subtitle" class="muted">2 à 4 joueurs, un bonhomme chacun, une grille de Sudoku</span>
+        </div>
+      </header>
+
+      <p id="notice" class="notice" role="alert" hidden></p>
+
+      <!-- Accueil : parties ouvertes, créer, solo (src/main.ts). -->
+      <section id="screen-home" class="screen">
+        <div class="columns">
+          <section class="card wide">
+            <div class="card-head">
+              <h2>Parties ouvertes</h2>
+              <button id="home-refresh" type="button" class="btn btn-outline">Actualiser</button>
+            </div>
+            <div id="home-list" class="game-list"></div>
+            <p id="home-list-note" class="muted small"></p>
+          </section>
+          <div class="side">
+            <section class="card">
+              <h2>Créer une partie</h2>
+              <p class="muted">La partie est hébergée par Cloudflare. Vous en êtes l'hôte : vous choisissez la difficulté de la grille et lancez la partie.</p>
+              <button id="home-create" type="button" class="btn btn-primary">Créer une partie</button>
+            </section>
+            <section class="card">
+              <h2>Solo</h2>
+              <p class="muted">Seul sur la grille, dans votre navigateur, sans réseau.</p>
+              <button id="home-solo" type="button" class="btn btn-outline">Lancer le solo</button>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-create" class="screen" hidden>
+        <form id="create-form" class="card form">
+          <h1>Créer une partie</h1>
+          <div class="field">
+            <label for="create-game">Nom de la partie</label>
+            <input id="create-game" type="text" maxlength="40" autocomplete="off" required />
+          </div>
+          <div class="field">
+            <label for="create-name">Votre nom</label>
+            <input id="create-name" type="text" maxlength="24" autocomplete="nickname" required />
+          </div>
+          <div class="field">
+            <label for="create-password">Mot de passe de création</label>
+            <input id="create-password" type="password" autocomplete="off" required />
+          </div>
+          <p id="create-error" class="error" role="alert" hidden></p>
+          <div class="actions">
+            <button id="create-cancel" type="button" class="btn btn-outline">Annuler</button>
+            <button id="create-submit" type="submit" class="btn btn-primary">Créer la partie</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="screen-join" class="screen" hidden>
+        <form id="join-form" class="card form">
+          <h1 id="join-title">Rejoindre</h1>
+          <div class="field">
+            <label for="join-name">Votre nom</label>
+            <input id="join-name" type="text" maxlength="24" autocomplete="nickname" required />
+          </div>
+          <p id="join-error" class="error" role="alert" hidden></p>
+          <div class="actions">
+            <button id="join-cancel" type="button" class="btn btn-outline">Annuler</button>
+            <button id="join-submit" type="submit" class="btn btn-primary">Rejoindre</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Salle d'attente : joueurs, couleur, difficulté, lancement. -->
+      <section id="screen-room" class="screen" hidden>
+        <div class="room-head">
+          <div>
+            <h1 id="room-title"></h1>
+            <span id="room-sub" class="muted"></span>
+          </div>
+          <button id="room-leave" type="button" class="btn btn-outline">Quitter la salle</button>
+        </div>
+        <div class="columns">
+          <section class="card half">
+            <h2 id="room-count">Joueurs</h2>
+            <div id="room-players" class="slots"></div>
+            <h2>Votre couleur</h2>
+            <div id="room-colors" class="swatches"></div>
+          </section>
+          <section class="card half">
+            <h2>Grille</h2>
+            <div id="room-levels" class="pills" role="group" aria-label="Difficulté de la grille"></div>
+            <p id="room-level-text"></p>
+            <div id="room-host">
+              <button id="room-start" type="button" class="btn btn-launch">Lancer la partie</button>
+            </div>
+            <p id="room-guest" class="strong" hidden>En attente du lancement par l'hôte…</p>
+            <p id="room-error" class="error" role="alert" hidden></p>
+          </section>
+        </div>
+      </section>
+
+      <!-- Partie : vue Phaser (src/play/scene.ts) et panneau HTML (src/play/screen.ts). -->
+      <section id="screen-game" class="screen" hidden>
+        <div class="game">
+          <div class="game-main">
+            <div class="game-stage">
+              <div id="game-canvas" class="game-canvas"></div>
+              <div id="game-end" class="game-end" hidden>
+                <span class="end-title">Partie terminée</span>
+                <ol id="game-ranking" class="ranking"></ol>
+                <span class="end-note">Classement au nombre de cases remplies ; s'il ne reste qu'un bonhomme, il est premier.</span>
+                <button id="game-end-home" type="button" class="btn btn-light">Retour à l'accueil</button>
+              </div>
+            </div>
+            <div id="game-digits" class="digits" role="group" aria-label="Écrire un chiffre"></div>
+            <p id="game-message" class="game-message" aria-live="polite"></p>
+          </div>
+          <aside class="game-side">
+            <section class="card">
+              <h2 id="game-title"></h2>
+              <span id="game-level" class="muted"></span>
+              <div id="game-scores" class="scores"></div>
+            </section>
+            <section class="card">
+              <h2>Commandes</h2>
+              <p class="muted">Flèches ou ZQSD : se déplacer.</p>
+              <p class="muted">Touches 1 à 9, ou les boutons sous la grille : écrire ce chiffre dans la case sous votre bonhomme, encadrée de votre couleur. Un chiffre faux coûte un PV ; à 0 PV, le bonhomme est éliminé.</p>
+            </section>
+            <button id="game-quit" type="button" class="btn btn-outline">Quitter la partie</button>
+          </aside>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

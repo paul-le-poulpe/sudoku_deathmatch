@@ -41,7 +41,7 @@ inventée.
 La racine du dépôt est ce dossier (`sudoku_deathmatch/sudoku_deathmatch/`,
 celui qui contient `.git`), pas le dossier parent.
 
-Prévu (`01-Architecture.md` §1) ; rien n'existe encore :
+Tout existe (première version, 15 novembre 2026), sauf `server/` :
 
 ```
 packages/
@@ -76,11 +76,28 @@ que des enveloppes (minuterie, transport).
 
 ## Vérifier
 
-Rien à vérifier tant qu'il n'y a pas de code. Les commandes (typecheck, tests,
-`npm run dev -w client`, `npx wrangler dev`) seront écrites ici avec la
-première version (`01-Architecture.md` §9).
+Depuis la racine du dépôt, après `npm install` :
 
-wrangler ne sera pas installé globalement : toujours `npx wrangler`.
+- `npm run typecheck` — typecheck TypeScript de tous les workspaces. Pas encore
+  de tests.
+- `npm run dev -w client` — le client sur `http://localhost:5173` (solo sans
+  serveur ; `/api/*`, WebSocket compris, redirigé vers `wrangler dev`).
+  `npm run build -w client` le compile dans `client/dist/`.
+- `cd worker && npx wrangler dev` — Worker, lobby et parties Cloudflare en local
+  sur `http://127.0.0.1:8787`, qui sert aussi la page : **compiler le client
+  d'abord**. Secrets locaux dans `worker/.dev.vars` (copier
+  `worker/.dev.vars.example`, ignoré par git).
+- `npm run catalog` — régénère les deux catalogues de grilles
+  (`packages/catalog/src/grids.ts` et `client/src/solo-grids.ts`, 02-Grilles
+  §1). Réglages : `node packages/catalog/scripts/make-catalog.ts --online=100
+  --solo=10 --seed=1`.
+- Le catalogue en ligne ne doit jamais être dans la page : après un build,
+  chercher une solution de `packages/catalog/src/grids.ts` dans `client/dist`
+  ne doit rien trouver.
+- Après une modification de `worker/wrangler.toml` :
+  `cd worker && npm run types` (régénère `worker-configuration.d.ts`).
+
+wrangler n'est pas installé globalement : toujours `npx wrangler`.
 
 ---
 

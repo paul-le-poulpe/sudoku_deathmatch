@@ -1,0 +1,19 @@
+{
+  "name": "@sudoku-deathmatch/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "types": "wrangler types --include-env=false",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sudoku-deathmatch/catalog": "*",
+    "@sudoku-deathmatch/room": "*",
+    "@sudoku-deathmatch/shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "wrangler": "^4.162.0"
+  }
+}

@@ -91,15 +91,27 @@ utiliser :
 Une grille que ce solveur ne termine pas demande de deviner : à exclure, ou à
 classer à part (§4).
 
-**Provisoire (maquette du 15 novembre 2026)** : trois niveaux.
-- Facile : singletons seulement, au moins 36 chiffres donnés.
-- Moyen : singletons seulement, le moins de chiffres donnés possible.
-- Difficile : les singletons ne suffisent pas.
+**Provisoire (première version, 15 novembre 2026)** : trois niveaux. Le script
+(`packages/catalog/scripts/sudoku.ts`) connaît deux niveaux de techniques : 1,
+les singletons ; 2, en plus, les candidats verrouillés (pointage, réclamation)
+et les paires nues et cachées.
+- Facile : résolue au niveau 1, au moins 36 chiffres donnés.
+- Moyen : résolue au niveau 1, le moins de chiffres donnés possible (24 à 31
+  dans le catalogue actuel).
+- Difficile : pas résolue au niveau 1, résolue au niveau 2 (23 à 30 chiffres
+  donnés). Une grille qui demanderait davantage n'entre pas au catalogue.
+
+Le script retire les chiffres par paires symétriques (case `i` et case
+`80 − i`) tant que la grille reste résoluble au niveau voulu ; une grille
+résolue par déduction seule a une seule solution.
+
+**Taille (provisoire)** : 100 grilles par niveau en ligne, 10 par niveau en
+solo, graine 1 (`npm run catalog`).
 
 ## 4. Points ouverts
 
 - **Niveaux** : combien, et quelles techniques pour chacun.
-- **Taille du catalogue** par niveau.
+- **Taille du catalogue** par niveau (première version : §3).
 - **Choix de la grille** : l'hôte choisit le niveau dans la salle d'attente
   (`01-Architecture.md` §4) ; peut-il aussi rejouer une grille précise ?
 - **Taille de la grille** : 9 × 9 supposé par `01-Architecture.md` §3.

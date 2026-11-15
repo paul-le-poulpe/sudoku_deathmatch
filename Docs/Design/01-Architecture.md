@@ -342,9 +342,9 @@ Propre à ce jeu :
   Choix de l'auteur le 15 novembre 2026, parce que viendront des effets
   visuels, des particules, peut-être des tirs et des zombies (`00-Game.md`
   §3) : Phaser fournit particules, interpolations d'animation, sprites animés,
-  caméra et chargement des images. Version : la dernière stable au moment de
-  l'implémentation. Phaser pèse lourd (de l'ordre du mégaoctet minifié, à
-  mesurer dans le build) ; il n'est chargé qu'au lancement d'une partie.
+  caméra et chargement des images. Version 4.2.1 (dernière stable le
+  15 novembre 2026). Phaser pèse 1,4 Mo minifié (357 Ko compressé) ; il est
+  dans son propre fichier, chargé au lancement d'une partie (import dynamique).
 - **Phaser ne fait qu'afficher et lire le clavier.** Les positions viennent de
   la prédiction (son bonhomme) et des snapshots (les autres) ; les cases, PV et
   éléments viennent des événements de l'hôte. La physique de Phaser (Arcade,
@@ -417,14 +417,43 @@ la file d'entrées de l'hôte.
 2. **En cours** : étape 2, les grilles (`02-Grilles.md`). Décidé le
    15 novembre 2026 : catalogue pré-généré, transformé au lancement. Reste :
    les niveaux.
-3. Étape 3 : première version (solo + Cloudflare). Avant son premier push sur
-   `main` : l'auteur ajoute au dépôt GitHub les secrets `CLOUDFLARE_API_TOKEN`
-   et `CLOUDFLARE_ACCOUNT_ID`, puis crée les secrets du Worker `LOBBY_SECRET` et
-   `CREATE_PASSWORD` (`npx wrangler secret put …` dans `worker/`). Sans eux, la
-   GitHub Action et la création de parties échouent.
+3. **Fait (15 novembre 2026) : première version (solo + Cloudflare).** Existe :
+   `packages/shared`, `packages/engine`, `packages/room`, `packages/catalog`
+   (script et catalogue), `worker/` (lobby, routes, Durable Object `Game` à
+   50 ms), `client/` (accueil, salle d'attente, partie avec Phaser, solo dans un
+   Web Worker), `.github/workflows/deploy.yml`. Vérifié : typecheck, build du
+   client, build du Worker (`wrangler deploy --dry-run`), absence du catalogue
+   en ligne dans `client/dist`. Pas vérifié : une partie jouée (à faire par
+   l'auteur), `wrangler dev`, le déploiement. Pas de tests.
 
-Pas de `deploy.yml` avant l'étape 3 : un push sur `main` lancerait
-`wrangler deploy` sans Worker.
+   Avant le premier push sur `main` : l'auteur ajoute au dépôt GitHub les
+   secrets `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID` ; sans eux, la
+   GitHub Action échoue. Après le premier déploiement : le secret du Worker
+   `CREATE_PASSWORD` (`npx wrangler secret put CREATE_PASSWORD` dans `worker/`),
+   sans lequel la création de parties répond `503`. `LOBBY_SECRET` attend
+   `server/`.
+
+### Choix faits à l'implémentation (provisoires)
+
+- **Prédiction** (`client/src/play/session.ts`) : le client garde la direction
+  de chacun de ses 256 derniers ticks et le tick local de chaque `seq`. À un
+  snapshot, il repart de la position de l'hôte au tick local `tick(seq) +
+  since` et rejoue ses directions jusqu'au tick courant ; l'écart est effacé en
+  environ 80 ms, ou d'un coup au-delà de 2 cases.
+- **Horloge de l'hôte vue du client** : heure locale d'arrivée moins `tick ×
+  TICK_MS`, au plus petit des 40 derniers snapshots ; les autres bonshommes sont
+  affichés 2 ticks avant le tick estimé.
+- **Reconnexion** : l'hôte oublie la file et les numéros d'entrée du joueur
+  (`Match.resetInputs`) ; la nouvelle page repart de `seq` 1.
+- **Un remplissage sans réponse** de l'hôte après 3 s n'est plus affiché en
+  attente. L'hôte répond `ignored` (sans perte de PV) pour une case déjà remplie
+  ou un bonhomme trop loin de la case.
+- **Clavier** : écouté sur la fenêtre (`KeyboardEvent.code`, donc ZQSD sur un
+  clavier AZERTY et WASD sur QWERTY) ; le clavier de Phaser est désactivé.
+- **Après la fin**, l'hôte n'envoie plus de snapshots ; le Durable Object
+  arrête sa minuterie de ticks.
+- **Accueil et salle** : écrits à neuf d'après celui de Fronts of Iron, sans sa
+  reprise automatique au chargement (« Reprendre » dans la liste).
 
 ## 10. Pièges
 

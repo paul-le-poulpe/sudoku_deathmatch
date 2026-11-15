@@ -1,0 +1,4 @@
+# Secrets locaux pour `npx wrangler dev`. Copier ce fichier en `.dev.vars` (ignoré par git).
+# En production : `npx wrangler secret put LOBBY_SECRET` et `npx wrangler secret put CREATE_PASSWORD`.
+LOBBY_SECRET=dev-secret
+CREATE_PASSWORD=dev-password

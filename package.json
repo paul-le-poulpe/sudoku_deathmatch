@@ -1,0 +1,16 @@
+{
+  "name": "sudoku-deathmatch",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "packages/engine",
+    "packages/room",
+    "packages/catalog",
+    "worker",
+    "client"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "catalog": "node packages/catalog/scripts/make-catalog.ts"
+  }
+}
