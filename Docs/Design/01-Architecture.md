@@ -81,7 +81,7 @@ Identique à Fronts of Iron (son `01-Architecture.md` §2) :
 | --- | --- | --- |
 | Où tourne la simulation | chez chaque client | à un seul endroit, l'hôte : Durable Object, Node, ou Web Worker du solo |
 | Ce qui circule | ordres (client → hôte), puis tours (hôte → clients) | entrées (client → hôte) ; positions et événements (hôte → clients) |
-| Le client | recalcule tout l'état | affiche ; ne calcule que son propre bonhomme (prédiction) et, plus tard, son contact avec les pièges et projectiles |
+| Le client | recalcule tout l'état | affiche ; ne calcule que son propre bonhomme (prédiction) et, plus tard, son contact avec les projectiles et les pièges visibles |
 | Déterminisme entre navigateurs | obligatoire | inutile ; le moteur reste sans horloge et à hasard seedé (`CLAUDE.md`, règle 2) |
 | Reconnexion | rejoue tous les tours depuis le début | reçoit l'état courant |
 | Hashes, désynchronisation | oui | n'existent pas : il n'y a qu'une copie de la partie |
@@ -132,8 +132,8 @@ Décidé par l'auteur le 15 novembre 2026.
   des bords, provisoire, pour un client dont la position prédite est
   légèrement en avance), que la case est vide, puis compare le chiffre à la
   solution. Chiffre faux : refusé, 1 PV en moins (`00-Game.md` §1).
-- Plus tard, `hit {id}` : un piège ou un projectile touche son bonhomme (§3,
-  Pièges et projectiles).
+- Plus tard, `hit {id}` : un projectile ou un piège visible touche son
+  bonhomme (§3, Pièges et projectiles).
 
 ### Changements de direction rapprochés
 
@@ -172,8 +172,8 @@ l'hôte calculent la même trajectoire, tick par tick, et la prédiction n'a rie
 - `events {tick, events}`, seulement pour un tick où il s'est passé quelque
   chose qui ne se déduit pas des positions : case remplie (case, chiffre,
   joueur) ; chiffre refusé (joueur, case, PV restants) ; bonhomme éliminé
-  (joueur) ; fin de partie (classement) ; plus tard pièges et tourelles posés,
-  tirs annoncés (§3, Pièges et projectiles).
+  (joueur) ; fin de partie (classement) ; plus tard pièges posés (une mine :
+  à son seul poseur), tirs annoncés, explosions (§3, Pièges et projectiles).
   **Doit arriver** : un événement perdu ne se rattrape pas au message suivant.
 - `state {…}` : état complet de la partie (grille sans la solution, joueurs et
   leurs PV, cases remplies et leur propriétaire), au lancement et à chaque
@@ -264,14 +264,20 @@ acceptée : à l'écran, son propre bonhomme est en avance sur ceux des autres
 d'environ 100 ms plus un demi aller-retour. Les bonshommes ne se frappent pas
 (`00-Game.md` §1) ; pour les pièges et les projectiles, voir ci-dessous.
 
-### Pièges et projectiles : le client détecte le contact avec son bonhomme
+### Pièges et projectiles : qui détecte le contact
 
-Décidé par l'auteur le 15 novembre 2026. Pas encore implémenté : les pièges et
-les tourelles ne sont pas dans la version 1.
+Décidé par l'auteur le 15 novembre 2026. Pas encore implémenté : les pièges ne
+sont pas dans la version 1 (règles : `03-Pieges.md`).
 
-Ce qui doit être juste (`00-Game.md` §1) : sur l'écran d'un joueur, le contact
-entre **son** bonhomme et les pièges et projectiles. Celui des autres
-bonshommes peut paraître faux.
+Ce qui doit être juste (`03-Pieges.md` §1) : sur l'écran d'un joueur, le
+contact entre **son** bonhomme et les projectiles et les pièges qu'il voit.
+Celui des autres bonshommes peut paraître faux.
+
+Deux cas :
+- **un piège visible par tous** (la tourelle) **et ses projectiles** : le client
+  détecte le contact avec son bonhomme, l'hôte contrôle (ci-dessous) ;
+- **un piège caché** (la mine, vue par son seul poseur) : l'hôte détecte
+  (ci-dessous, Pièges cachés).
 
 - **Trajectoires calculables par tous.** L'hôte annonce chaque tir par un
   événement : projectile, point de départ, direction, vitesse, tick du départ.
@@ -286,7 +292,7 @@ bonshommes peut paraître faux.
   vers un autre bonhomme peut sembler le traverser, ou le toucher avant de
   l'atteindre.
 - **Le client détecte.** À chaque tick, il teste son bonhomme, à la position
-  où il le dessine, contre les pièges et les projectiles ; au contact, il
+  où il le dessine, contre les projectiles et les pièges visibles ; au contact, il
   envoie `hit {id}`, et l'hôte retire les PV. Un même danger ne touche un
   bonhomme qu'une fois. Pourquoi pas l'hôte : sa position du bonhomme s'écarte
   régulièrement d'un tick de celle du client (§3, Prédiction), il se tromperait
@@ -304,14 +310,36 @@ bonshommes peut paraître faux.
 - **Délai d'avertissement.** Un danger créé par l'hôte au tick T arrive chez
   le client un trajet aller plus tard, alors que la prédiction du client a
   déjà un trajet aller d'avance : le client l'apprend environ un ping trop
-  tard pour son propre écran. Un danger ne doit donc pas pouvoir toucher avant
-  un délai plus long que le ping (durée : `00-Game.md` §3) : le piège s'arme
-  après ce délai, l'hôte annonce le tir au début de la charge de la tourelle.
-  Un client qui apprend un danger trop tard ne teste pas le contact déjà passé
+  tard pour son propre écran. Un danger visible ne doit donc pas pouvoir
+  toucher avant un délai plus long que le ping (`03-Pieges.md` §4). Un client
+  qui apprend un danger trop tard ne teste pas le contact déjà passé
   (provisoire) ; le contrôle de l'hôte s'applique.
+- **La tourelle fixe sa direction au départ de la boule** (`03-Pieges.md` §3,
+  décidé par l'auteur le 15 novembre 2026). L'hôte annonce deux événements :
+  l'apparition de la boule (tourelle, tick du départ), puis le départ
+  (direction). La seconde d'apparition avertit du tir, pas de sa direction :
+  le client apprend la direction environ un ping trop tard pour son propre
+  écran, et dessine la boule là où elle est déjà arrivée à son instant, un peu
+  avancée (0,15 case pour 1,5 case/s et 100 ms de ping). Le contact sur le bout
+  de trajet qu'il n'a pas dessiné relève du contrôle de l'hôte (ci-dessus).
+  Le canon est dessiné par chaque client d'après les positions qu'il affiche :
+  il est décoratif et ne donne jamais la direction du tir.
 - **Danger qui disparaît en touchant** : chaque client apprend en retard qu'un
   autre bonhomme l'a pris. Deux joueurs peuvent alors chacun le voir toucher
-  leur propre bonhomme (`00-Game.md` §3).
+  leur propre bonhomme (`03-Pieges.md` §4).
+
+**Pièges cachés.** Un client ne peut tester le contact qu'avec un piège dont il
+connaît la position, et une position reçue par la page se lit dans une page
+modifiée. Donc, pour la mine :
+- la pose est annoncée **au seul poseur** (événement, et `state` à la
+  reconnexion) ; les autres clients ne reçoivent rien, et la case garde son
+  aspect chez eux (`03-Pieges.md` §2) ;
+- **l'hôte détecte** l'entrée d'un bonhomme adverse dans la case, et annonce
+  l'explosion à tous (case, joueur touché, PV restants) ;
+- la règle de l'écran exact ne perd rien : la victime ne voit pas la mine.
+  Effet visible : l'explosion arrive sur l'écran de la victime environ un ping
+  après que son bonhomme est entré dans la case, quand il est déjà un peu plus
+  loin.
 
 ### Remplissage, côté client
 
@@ -406,9 +434,9 @@ Propre à ce jeu :
   la prédiction (son bonhomme) et des snapshots (les autres) ; les cases, PV et
   éléments viennent des événements de l'hôte. La physique de Phaser (Arcade,
   Matter) ne décide de rien : un chiffre accepté, un PV perdu sont décidés par
-  l'hôte ; le contact entre son bonhomme et un piège ou un projectile est
-  calculé par le client avec la fonction de `packages/engine` que l'hôte
-  utilise pour son contrôle (§3, Pièges et projectiles). Elle peut servir à
+  l'hôte ; le contact entre son bonhomme et un projectile ou un piège visible
+  est calculé par le client, celui avec une mine par l'hôte, avec les
+  fonctions de `packages/engine` (§3, Pièges et projectiles). Elle peut servir à
   des effets purement visuels (particules qui rebondissent).
 - **Boucle d'affichage** : celle de Phaser (une image par rafraîchissement de
   l'écran). À chaque image : son bonhomme interpolé entre ses deux derniers
@@ -449,7 +477,7 @@ copié puis adapté ; les deux dépôts évoluent ensuite séparément.
 | WebTransport ou WebRTC vers l'hôte dès la v1 | impossible avec un Durable Object (§3, Transport) ; possible seulement dans `server/`, qui attend. Le protocole est prêt pour ce passage |
 | Grille en HTML (comme la maquette) | suffit pour 81 cases et 4 bonshommes, pas pour les effets visuels, particules et tirs prévus. Écarté par l'auteur le 15 novembre 2026 |
 | Appliquer chaque touche dès l'événement clavier, entre deux ticks | l'hôte, qui avance par ticks, ne peut pas reproduire la même durée : chaque changement de direction rapproché produirait une petite correction |
-| L'hôte seul détecte le contact entre un bonhomme et un piège ou un projectile | sa position du bonhomme s'écarte régulièrement d'un tick de celle du client (§3, Prédiction) : un tir évité de justesse à l'écran toucherait chez l'hôte. Variante, entrées datées par le client et appliquées par l'hôte avec un délai fixe : exacte hors paquet perdu, mais le bonhomme est vu 100 ms plus tard par les autres, et le délai doit être recalé quand les minuteries du client et de l'hôte dérivent. Écarté par l'auteur le 15 novembre 2026, au profit de la détection par le client avec contrôle de l'hôte |
+| L'hôte seul détecte le contact entre un bonhomme et un projectile ou un piège visible | sa position du bonhomme s'écarte régulièrement d'un tick de celle du client (§3, Prédiction) : un tir évité de justesse à l'écran toucherait chez l'hôte. Variante, entrées datées par le client et appliquées par l'hôte avec un délai fixe : exacte hors paquet perdu, mais le bonhomme est vu 100 ms plus tard par les autres, et le délai doit être recalé quand les minuteries du client et de l'hôte dérivent. Écarté par l'auteur le 15 novembre 2026, au profit de la détection par le client avec contrôle de l'hôte |
 | UDP | un navigateur ne peut pas faire d'UDP brut. TCP retarde les messages qui suivent un paquet perdu ; à 2 à 4 joueurs et 20 snapshots par seconde, le délai d'interpolation l'absorbe en général |
 
 ## 9. À vérifier, à décider, état d'avancement
@@ -468,8 +496,9 @@ répartition de la correction de prédiction, tolérance de remplissage, taille 
 la file d'entrées de l'hôte ; plus tard, marge du contrôle des contacts par
 l'hôte (§3, Pièges et projectiles).
 
-À décider avec l'auteur : les points ouverts de `00-Game.md` §3 et de
-`02-Grilles.md` §4 (niveaux de difficulté, taille du catalogue).
+À décider avec l'auteur : les points ouverts de `00-Game.md` §3, de
+`02-Grilles.md` §4 (niveaux de difficulté, taille du catalogue) et de
+`03-Pieges.md` §4.
 
 État :
 
@@ -545,6 +574,13 @@ l'hôte (§3, Pièges et projectiles).
   calcul est en entiers, comme `move`.
 - **Retirer le contrôle de l'hôte** « puisque le client détecte » : un client
   modifié qui n'envoie jamais `hit` devient invincible.
+- **Envoyer la position d'une mine à tous** (dans l'événement de pose, dans
+  `state`) « pour que chaque client détecte lui-même » : une page modifiée
+  affiche toutes les mines. Seul le poseur la reçoit ; l'hôte détecte.
+- **Changer l'aspect d'une case minée chez les autres** (lui retirer la
+  couleur du poseur, par exemple) : les joueurs attentifs voient le
+  changement, et l'hôte devrait l'annoncer, donc une page modifiée le
+  saurait. Décidé par l'auteur le 15 novembre 2026 : la case ne change pas.
 - **Croire que la position de l'hôte ne s'écarte de celle du client que si un
   paquet est perdu** : elle s'écarte d'un tick chaque fois qu'une entrée change
   de tick en arrivant (§3, Prédiction).

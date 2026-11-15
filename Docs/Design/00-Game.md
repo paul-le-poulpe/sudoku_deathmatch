@@ -8,6 +8,8 @@ Documents thématiques :
 - `02-Grilles.md` — d'où vient la grille d'une partie (catalogue pré-généré,
   transformé au lancement) et comment sa difficulté est mesurée ; niveaux à
   décider.
+- `03-Pieges.md` — ce qu'un joueur pose sur ses cases pour gêner les autres :
+  pose, mine, tourelle ; pas dans la version 1.
 
 ---
 
@@ -27,20 +29,12 @@ Décidé par l'auteur le 15 novembre 2026.
   - Chiffre juste : la case prend la couleur du joueur.
   - Chiffre faux : il est refusé, la case reste vide, et le joueur perd 1 PV.
 - **Pas de coups.** Les bonshommes ne peuvent pas se frapper.
-- **Gêner les adversaires** (pas dans la version 1). Une case remplie octroie
-  au joueur des bonus, ou des malus pour ses adversaires : après avoir rempli
-  une case correctement, le joueur pourra y poser un élément de son choix, qui
-  gêne les autres joueurs et peut leur enlever des PV :
-  - un **piège** ;
-  - une **tourelle**, qui tire des projectiles sur les autres joueurs.
-
-  Les autres joueurs doivent les éviter : c'est une épreuve d'adresse. La
-  trajectoire d'un projectile est entièrement fixée au moment du tir.
-- **Ce que chaque écran doit montrer juste.** Sur l'écran d'un joueur, le
-  contact entre son bonhomme et les pièges et projectiles est exact : touché
-  à l'écran, touché dans la partie ; évité à l'écran, évité. Le contact
-  entre un autre bonhomme et un projectile peut y paraître faux. Comment :
-  `01-Architecture.md` §3, Pièges et projectiles.
+- **Pièges** (pas dans la version 1). Une case remplie octroie au joueur des
+  bonus, ou des malus pour ses adversaires : après avoir rempli une case
+  correctement, le joueur peut y poser un piège (mot générique, les tourelles
+  en sont), qui gêne les autres joueurs et peut leur enlever des PV. Ils
+  doivent les éviter : c'est une épreuve d'adresse. Premiers pièges : la mine
+  et la tourelle. Règles : `03-Pieges.md`.
 - **Fin de partie.** Quand toutes les cases sont remplies, ou quand tous les
   bonshommes sauf un ont été éliminés. On détermine alors le vainqueur.
 - **Bots.** Il pourra y en avoir à terme, pas avant que les fonctionnalités du
@@ -70,7 +64,7 @@ elles pourront changer ensuite.
 - **Solo** : le joueur seul sur la grille, sans bots.
 - **Pas de pause.** L'hôte peut lancer la partie sans attendre d'autres
   joueurs.
-- **Pas dans la version 1** : pièges et tourelles, bots.
+- **Pas dans la version 1** : pièges (`03-Pieges.md`), bots.
 
 Maquette jouable (15 novembre 2026) : artifact « Sudoku Deathmatch —
 maquette » (accueil, création, salle d'attente, partie). Elle n'a pas encore
@@ -79,16 +73,7 @@ de ce document font foi.
 
 ## 3. Points ouverts
 
-- **Pièges et tourelles** : quelles sortes, leurs effets, combien de PV ils
-  enlèvent, s'ils ont un coût, combien un joueur peut en poser ; la cible
-  d'une tourelle, la vitesse de ses projectiles.
-- **Délai d'avertissement** : temps entre l'apparition d'un piège, ou l'annonce
-  d'un tir, et le moment où il peut toucher. Il doit être plus long que le
-  ping des joueurs, sinon un joueur peut être touché par un danger que son
-  écran ne montre pas encore (`01-Architecture.md` §3, Pièges et projectiles).
-- **Piège ou projectile qui touche** : disparaît-il, ou continue-t-il ? S'il
-  disparaît, deux joueurs peuvent chacun le voir toucher leur propre bonhomme
-  (`01-Architecture.md` §3, Pièges et projectiles).
+- **Pièges** : `03-Pieges.md` §4.
 - **Vainqueur** : la règle définitive (version 1 : §2, Classement).
 - **Collisions entre bonshommes** : la version 1 les laisse se traverser (§2) ;
   à décider plus tard.
