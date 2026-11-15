@@ -81,7 +81,7 @@ Identique à Fronts of Iron (son `01-Architecture.md` §2) :
 | --- | --- | --- |
 | Où tourne la simulation | chez chaque client | à un seul endroit, l'hôte : Durable Object, Node, ou Web Worker du solo |
 | Ce qui circule | ordres (client → hôte), puis tours (hôte → clients) | entrées (client → hôte) ; positions et événements (hôte → clients) |
-| Le client | recalcule tout l'état | affiche ; ne calcule que son propre bonhomme (prédiction) |
+| Le client | recalcule tout l'état | affiche ; ne calcule que son propre bonhomme (prédiction) et, plus tard, son contact avec les pièges et projectiles |
 | Déterminisme entre navigateurs | obligatoire | inutile ; le moteur reste sans horloge et à hasard seedé (`CLAUDE.md`, règle 2) |
 | Reconnexion | rejoue tous les tours depuis le début | reçoit l'état courant |
 | Hashes, désynchronisation | oui | n'existent pas : il n'y a qu'une copie de la partie |
@@ -132,6 +132,8 @@ Décidé par l'auteur le 15 novembre 2026.
   des bords, provisoire, pour un client dont la position prédite est
   légèrement en avance), que la case est vide, puis compare le chiffre à la
   solution. Chiffre faux : refusé, 1 PV en moins (`00-Game.md` §1).
+- Plus tard, `hit {id}` : un piège ou un projectile touche son bonhomme (§3,
+  Pièges et projectiles).
 
 ### Changements de direction rapprochés
 
@@ -142,9 +144,10 @@ Exemple : gauche, puis haut 30 ms plus tard.
   partir du même tick.
 - **Dans deux ticks différents** : deux `input`, dont chacun a duré au moins un
   tick chez le client. Le réseau peut les livrer dans le même tick de l'hôte
-  (gigue) ; la file les applique quand même un par tick, donc avec les mêmes
-  durées que chez le client. Sans cette file, l'hôte n'appliquerait que le
-  second, et le client corrigerait la position.
+  (gigue) ; la file les applique quand même un par tick, donc le premier dure
+  au moins un tick chez l'hôte aussi. Sans cette file, l'hôte n'appliquerait
+  que le second. La file ne règle que ce cas : une entrée qui arrive plus tard
+  ou plus tôt que prévu change la durée de la précédente (§3, Prédiction).
 - Le WebSocket garde l'ordre des messages : l'hôte ne reçoit jamais haut avant
   gauche.
 - **Ce qui est perdu** : une touche appuyée puis relâchée dans le même tick
@@ -153,9 +156,9 @@ Exemple : gauche, puis haut 30 ms plus tard.
   le client, donc 0 à 50 ms après l'appui (25 ms en moyenne). Si c'est
   sensible, passer le tick à 30 Hz (33 ms).
 
-Résultat : sans gigue du réseau au-delà de ce que la file absorbe, le client et
+Résultat : tant que chaque entrée met le même temps à arriver, le client et
 l'hôte calculent la même trajectoire, tick par tick, et la prédiction n'a rien
-à corriger.
+à corriger. Sinon, l'écart et sa correction : §3, Prédiction.
 
 ### Ce que l'hôte envoie : des positions absolues
 
@@ -169,7 +172,8 @@ l'hôte calculent la même trajectoire, tick par tick, et la prédiction n'a rie
 - `events {tick, events}`, seulement pour un tick où il s'est passé quelque
   chose qui ne se déduit pas des positions : case remplie (case, chiffre,
   joueur) ; chiffre refusé (joueur, case, PV restants) ; bonhomme éliminé
-  (joueur) ; fin de partie (classement) ; plus tard éléments posés.
+  (joueur) ; fin de partie (classement) ; plus tard pièges et tourelles posés,
+  tirs annoncés (§3, Pièges et projectiles).
   **Doit arriver** : un événement perdu ne se rattrape pas au message suivant.
 - `state {…}` : état complet de la partie (grille sans la solution, joueurs et
   leurs PV, cases remplies et leur propriétaire), au lancement et à chaque
@@ -240,11 +244,16 @@ les autres jeux.
   `ack.seq`, l'avance de `ack.since` ticks dans la direction de cette entrée,
   et compare le résultat à la position envoyée par l'hôte. L'écart est ajouté à
   sa position actuelle, réparti sur quelques images (provisoire).
-- L'écart vient de la différence entre la durée d'un appui vue par le client
-  et vue par l'hôte. Grâce aux entrées par tick et à la file de l'hôte
-  (ci-dessus), il est nul tant que la gigue du réseau reste sous deux ticks ;
-  il apparaît quand un message est très retardé (exemple du paragraphe
-  « Pourquoi les positions ne dérivent pas »).
+- L'écart vient d'une direction qui ne dure pas le même nombre de ticks chez
+  le client et chez l'hôte. Le client compte la durée sur ses propres ticks ;
+  l'hôte applique l'entrée suivante au tick où elle arrive. Si elle met un peu
+  plus (ou moins) longtemps que la précédente à arriver et tombe ainsi dans un
+  autre tick, ou si la minuterie de l'hôte ne bat pas exactement au rythme de
+  celle du client, l'hôte garde la direction précédente un tick de plus (ou de
+  moins) : 0,15 case d'écart. C'est régulier, pas seulement quand un paquet est
+  perdu ; la correction l'efface en environ 80 ms. Un message très retardé
+  donne un écart plus grand (exemple du paragraphe « Pourquoi les positions ne
+  dérivent pas »).
 
 ### Affichage des autres bonshommes
 
@@ -252,9 +261,57 @@ Affichés 100 ms dans le passé (2 snapshots, provisoire) : leur position est
 interpolée entre les deux snapshots qui encadrent cet instant. Le délai
 absorbe un snapshot en retard sans que le bonhomme s'arrête. Conséquence
 acceptée : à l'écran, son propre bonhomme est en avance sur ceux des autres
-d'environ 100 ms plus un demi aller-retour. Pour les collisions ou les attaques
-entre bonshommes (`00-Game.md` §3), ce décalage devra être pris en compte par
-l'hôte.
+d'environ 100 ms plus un demi aller-retour. Les bonshommes ne se frappent pas
+(`00-Game.md` §1) ; pour les pièges et les projectiles, voir ci-dessous.
+
+### Pièges et projectiles : le client détecte le contact avec son bonhomme
+
+Décidé par l'auteur le 15 novembre 2026. Pas encore implémenté : les pièges et
+les tourelles ne sont pas dans la version 1.
+
+Ce qui doit être juste (`00-Game.md` §1) : sur l'écran d'un joueur, le contact
+entre **son** bonhomme et les pièges et projectiles. Celui des autres
+bonshommes peut paraître faux.
+
+- **Trajectoires calculables par tous.** L'hôte annonce chaque tir par un
+  événement : projectile, point de départ, direction, vitesse, tick du départ.
+  Une fonction de `packages/engine`, en entiers comme `move`, donne la position
+  d'un projectile à n'importe quel tick ; l'hôte et le client utilisent la
+  même. Un projectile n'entre pas dans les snapshots. Un piège ne bouge pas.
+- **Dessinés à l'instant de son bonhomme.** Le client sait à quel tick de
+  l'hôte correspond sa position prédite (l'`ack` donne le tick de l'hôte où
+  son entrée a été appliquée). Il dessine projectiles et pièges à ce tick, pas
+  dans le passé comme les autres bonshommes : sur son écran, son bonhomme et
+  les dangers sont au même instant de la partie. Conséquence acceptée : un tir
+  vers un autre bonhomme peut sembler le traverser, ou le toucher avant de
+  l'atteindre.
+- **Le client détecte.** À chaque tick, il teste son bonhomme, à la position
+  où il le dessine, contre les pièges et les projectiles ; au contact, il
+  envoie `hit {id}`, et l'hôte retire les PV. Un même danger ne touche un
+  bonhomme qu'une fois. Pourquoi pas l'hôte : sa position du bonhomme s'écarte
+  régulièrement d'un tick de celle du client (§3, Prédiction), il se tromperait
+  sur les tirs évités de justesse.
+- **L'hôte contrôle.** Un client modifié qui n'envoie jamais `hit` serait
+  invincible. L'hôte teste donc aussi chaque bonhomme, avec une zone de contact
+  réduite d'une marge (0,3 case, provisoire) ; un contact trouvé ainsi compte
+  même sans `hit`. Un tricheur ne gagne que les frôlements. Un joueur honnête
+  n'est touché sans l'avoir vu que si sa position chez l'hôte s'écarte de plus
+  que la marge, ce qui demande un message très retardé (un paquet perdu).
+- **Un faux `hit` n'est pas un risque** tant qu'un contact n'a d'effet que sur
+  le bonhomme touché : il ne retire des PV qu'à celui qui l'envoie. Si un
+  contact a un jour d'autres effets (des points pour le poseur, un projectile
+  qui disparaît), l'hôte devra vérifier que le contact était possible.
+- **Délai d'avertissement.** Un danger créé par l'hôte au tick T arrive chez
+  le client un trajet aller plus tard, alors que la prédiction du client a
+  déjà un trajet aller d'avance : le client l'apprend environ un ping trop
+  tard pour son propre écran. Un danger ne doit donc pas pouvoir toucher avant
+  un délai plus long que le ping (durée : `00-Game.md` §3) : le piège s'arme
+  après ce délai, l'hôte annonce le tir au début de la charge de la tourelle.
+  Un client qui apprend un danger trop tard ne teste pas le contact déjà passé
+  (provisoire) ; le contrôle de l'hôte s'applique.
+- **Danger qui disparaît en touchant** : chaque client apprend en retard qu'un
+  autre bonhomme l'a pris. Deux joueurs peuvent alors chacun le voir toucher
+  leur propre bonhomme (`00-Game.md` §3).
 
 ### Remplissage, côté client
 
@@ -348,20 +405,22 @@ Propre à ce jeu :
 - **Phaser ne fait qu'afficher et lire le clavier.** Les positions viennent de
   la prédiction (son bonhomme) et des snapshots (les autres) ; les cases, PV et
   éléments viennent des événements de l'hôte. La physique de Phaser (Arcade,
-  Matter) ne décide de rien : une collision, un tir qui touche, un PV perdu
-  sont calculés par l'hôte dans `packages/engine`. Elle peut servir à des
-  effets purement visuels (particules qui rebondissent).
+  Matter) ne décide de rien : un chiffre accepté, un PV perdu sont décidés par
+  l'hôte ; le contact entre son bonhomme et un piège ou un projectile est
+  calculé par le client avec la fonction de `packages/engine` que l'hôte
+  utilise pour son contrôle (§3, Pièges et projectiles). Elle peut servir à
+  des effets purement visuels (particules qui rebondissent).
 - **Boucle d'affichage** : celle de Phaser (une image par rafraîchissement de
   l'écran). À chaque image : son bonhomme interpolé entre ses deux derniers
   ticks prédits (corrigé progressivement), les autres interpolés entre deux
   snapshots (§3), la grille et ses couleurs, les PV en haut de la grille.
 - **Clavier** : l'état des flèches est lu une fois par tick (§3) ; jamais un
   `input` par image ni par événement clavier.
-- **Plus tard, tirs et zombies** : ils seraient calculés par l'hôte et
-  entreraient dans les snapshots. L'hôte devra tenir compte du décalage
-  d'affichage des autres bonshommes (100 ms plus un demi aller-retour) pour
-  décider si un tir touche. Avec beaucoup d'objets, le snapshot grossit : un
-  format binaire deviendra peut-être utile.
+- **Plus tard, tirs** : annoncés une fois par un événement, leur trajectoire
+  est calculée par chaque client (§3, Pièges et projectiles) ; ils n'entrent
+  pas dans les snapshots. Des zombies (idée non décidée, `00-Game.md` §3), qui
+  ne suivraient pas une trajectoire fixée d'avance, y entreraient : avec
+  beaucoup d'objets, un format binaire deviendra peut-être utile.
 
 ## 7. Repris de Fronts of Iron
 
@@ -390,6 +449,7 @@ copié puis adapté ; les deux dépôts évoluent ensuite séparément.
 | WebTransport ou WebRTC vers l'hôte dès la v1 | impossible avec un Durable Object (§3, Transport) ; possible seulement dans `server/`, qui attend. Le protocole est prêt pour ce passage |
 | Grille en HTML (comme la maquette) | suffit pour 81 cases et 4 bonshommes, pas pour les effets visuels, particules et tirs prévus. Écarté par l'auteur le 15 novembre 2026 |
 | Appliquer chaque touche dès l'événement clavier, entre deux ticks | l'hôte, qui avance par ticks, ne peut pas reproduire la même durée : chaque changement de direction rapproché produirait une petite correction |
+| L'hôte seul détecte le contact entre un bonhomme et un piège ou un projectile | sa position du bonhomme s'écarte régulièrement d'un tick de celle du client (§3, Prédiction) : un tir évité de justesse à l'écran toucherait chez l'hôte. Variante, entrées datées par le client et appliquées par l'hôte avec un délai fixe : exacte hors paquet perdu, mais le bonhomme est vu 100 ms plus tard par les autres, et le délai doit être recalé quand les minuteries du client et de l'hôte dérivent. Écarté par l'auteur le 15 novembre 2026, au profit de la détection par le client avec contrôle de l'hôte |
 | UDP | un navigateur ne peut pas faire d'UDP brut. TCP retarde les messages qui suivent un paquet perdu ; à 2 à 4 joueurs et 20 snapshots par seconde, le délai d'interpolation l'absorbe en général |
 
 ## 9. À vérifier, à décider, état d'avancement
@@ -405,7 +465,8 @@ copié puis adapté ; les deux dépôts évoluent ensuite séparément.
 
 Provisoire, à régler en jouant : tick, unités, vitesse, délai d'interpolation,
 répartition de la correction de prédiction, tolérance de remplissage, taille de
-la file d'entrées de l'hôte.
+la file d'entrées de l'hôte ; plus tard, marge du contrôle des contacts par
+l'hôte (§3, Pièges et projectiles).
 
 À décider avec l'auteur : les points ouverts de `00-Game.md` §3 et de
 `02-Grilles.md` §4 (niveaux de difficulté, taille du catalogue).
@@ -469,8 +530,24 @@ la file d'entrées de l'hôte.
 - **Laisser le client décider** d'une case remplie ou de sa position : toute la
   vérification se fait dans `packages/room` (`CLAUDE.md`, règle 3).
 - **Utiliser la physique de Phaser pour une règle** (collision, tir, PV) : elle
-  tourne dans le navigateur de chaque joueur, pas chez l'hôte, et chaque écran
-  déciderait autre chose. Phaser affiche ; `packages/engine` décide.
+  calcule en virgule flottante, avec son propre pas de temps ; le contrôle des
+  contacts par l'hôte, qui utilise `packages/engine`, trouverait autre chose
+  que l'écran. Phaser affiche ; `packages/engine` calcule.
+- **Dessiner les projectiles comme les autres bonshommes**, interpolés dans le
+  passé : sur l'écran du joueur, ils seraient en retard d'environ un ping plus
+  125 ms sur son bonhomme, et il se verrait touché par des tirs qu'il a
+  évités, ou l'inverse. Ils sont dessinés au tick de son bonhomme (§3, Pièges
+  et projectiles).
+- **Un projectile dont la trajectoire dépend de ce qui se passe après le tir**
+  (il suit sa cible, rebondit sur un bonhomme, dévie au hasard à chaque tick) :
+  le client ne peut plus la calculer, et le contact sur son écran n'est plus
+  exact. Tout ce qui fixe la trajectoire est dans l'événement du tir, et le
+  calcul est en entiers, comme `move`.
+- **Retirer le contrôle de l'hôte** « puisque le client détecte » : un client
+  modifié qui n'envoie jamais `hit` devient invincible.
+- **Croire que la position de l'hôte ne s'écarte de celle du client que si un
+  paquet est perdu** : elle s'écarte d'un tick chaque fois qu'une entrée change
+  de tick en arrivant (§3, Prédiction).
 - **Importer Phaser dans `packages/engine` ou `packages/room`** : ils ne
   tourneraient plus dans un Durable Object ni sous Node (`CLAUDE.md`,
   règle 2).

@@ -131,6 +131,11 @@ partagée par l'hôte et par la prédiction du client : elle calcule en entiers.
 Le client n'envoie que des entrées (direction, case et chiffre à remplir).
 L'hôte calcule les positions, accepte ou refuse les remplissages, et envoie le
 résultat. Un client ne décide jamais de sa position ni d'une case remplie.
+Seule exception (plus tard) : le client signale lui-même qu'un piège ou un
+projectile touche son propre bonhomme (un signalement ne fait du tort qu'à
+lui), et l'hôte détecte aussi les contacts évidents, pour qu'un client qui ne
+signale rien ne soit pas invincible (`01-Architecture.md` §3, Pièges et
+projectiles).
 **La solution de la grille ne quitte jamais l'hôte** : elle n'entre dans aucun
 message, et `packages/catalog` (les grilles des parties en ligne) n'est jamais
 importé par `client/`, ni directement ni par un autre paquet : le code de la
