@@ -42,15 +42,16 @@ Décidé par l'auteur le 15 novembre 2026.
   d'abord les joueurs qui ont survécu, classés par nombre de cases remplies,
   du plus au moins ; puis les joueurs éliminés, du dernier éliminé au premier.
   Sur cette fenêtre, l'hôte a un bouton pour relancer une partie (décidé par
-  l'auteur le 15 novembre 2026).
+  l'auteur le 15 novembre 2026). Chez les autres joueurs, à la même place, une
+  étiquette du même aspect que ce bouton dit « L'hôte peut relancer » (décidé
+  le 16 novembre 2026).
 
   Provisoire :
   - deux survivants avec autant de cases, ou deux joueurs éliminés au même
     tick : le premier est celui qui a rempli le plus de cases, puis l'ordre de
     la salle ;
   - la relance tire une nouvelle grille du même niveau et garde les joueurs
-    connectés ; un joueur déconnecté à ce moment quitte la partie ;
-  - les autres joueurs voient sur la fenêtre que l'hôte peut relancer.
+    connectés ; un joueur déconnecté à ce moment quitte la partie.
 - **Couleurs des joueurs** : palette « Classique » (bleu, rouge, vert, jaune,
   violet, charbon), choisie par l'auteur le 15 novembre 2026 dans la maquette
   « Sudoku Deathmatch — couleurs ». Valeurs : `client/src/colors.ts`.

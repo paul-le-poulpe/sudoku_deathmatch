@@ -472,6 +472,17 @@ p {
   align-self: center;
 }
 
+/* Même aspect qu'un bouton, sans action : « L'hôte peut relancer » chez les autres joueurs. */
+.btn-static {
+  display: inline-flex;
+  align-items: center;
+  cursor: default;
+}
+
+.btn-static[hidden] {
+  display: none;
+}
+
 /* Bouton secondaire sur le fond sombre de la fin de partie. */
 .btn-on-dark {
   border: 1px solid rgba(255, 255, 255, 0.6);
