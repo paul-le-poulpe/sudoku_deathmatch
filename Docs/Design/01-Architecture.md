@@ -557,6 +557,15 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
    2 PV, recharge de 20 s ; tourelle qui tire toutes les 6 s, sans boule
    dessinée avant le tir ; 4 PV (5 au premier essai), rendus par chaque chiffre juste. Vérifié :
    typecheck, build du client et du Worker. Pas vérifié : une partie jouée.
+8. **Fait (16 novembre 2026) : tutoriel** (`00-Game.md` §1). `<dialog
+   id="tutorial">` dans `client/index.html`, ouvert par `showModal()` ;
+   `client/src/tutorial.ts` écrit les cinq images en HTML (cases, bonhomme,
+   mine, tourelle, bandeau des PV refaits en CSS, classes `.tuto-*` de
+   `style.css`), pas avec Phaser : la fenêtre s'ouvre sur l'accueil, où Phaser
+   n'est pas lancé. Un changement du dessin d'un piège dans `scene.ts` n'atteint
+   donc pas le tutoriel : le refaire dans `style.css`. Vérifié : typecheck,
+   build du client, absence du catalogue en ligne dans `client/dist`. Pas
+   vérifié : l'affichage dans un navigateur.
 
 ### Choix faits à l'implémentation (provisoires)
 

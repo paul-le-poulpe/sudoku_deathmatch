@@ -23,6 +23,7 @@ import {
   wsUrl,
 } from "./online.ts";
 import { startPlay, type PlayController } from "./play/screen.ts";
+import { setupTutorial } from "./tutorial.ts";
 
 function $<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -312,6 +313,7 @@ $("join-form").addEventListener("submit", (e) => {
 });
 
 $("home-refresh").addEventListener("click", () => void refreshList());
+setupTutorial();
 
 $("home-create").addEventListener("click", () => {
   $<HTMLInputElement>("create-name").value = loadPlayerName();

@@ -70,6 +70,15 @@ Décidé par l'auteur le 15 novembre 2026.
 - **Couleurs des joueurs** : palette « Classique » (bleu, rouge, vert, jaune,
   violet, charbon), choisie par l'auteur le 15 novembre 2026 dans la maquette
   « Sudoku Deathmatch — couleurs ». Valeurs : `client/src/colors.ts`.
+- **Tutoriel** (décidé le 16 novembre 2026, maquette « Sudoku Deathmatch —
+  tutoriel ») : sur l'accueil, un bouton sous le solo ouvre une fenêtre
+  par-dessus la page, sur un fond assombri. Cinq étapes, peu de texte, surtout
+  des images : remplir une case, chiffre faux, poser un piège, la mine, la
+  tourelle. « Jouer », à la dernière étape, ferme la fenêtre ; la croix, un clic
+  sur le fond ou Échap aussi. Textes et images : `client/src/tutorial.ts`. Ses
+  textes et ses images répètent des valeurs des règles (4 PV, 2 PV de la mine,
+  20 s de recharge, une tourelle toutes les 6 s) : quand l'une change, le
+  tutoriel change avec elle.
 - **Bots.** Il pourra y en avoir à terme, pas avant que les fonctionnalités du
   jeu soient en place.
 

@@ -57,6 +57,11 @@
               <p class="muted">Seul sur la grille, dans votre navigateur, sans réseau.</p>
               <button id="home-solo" type="button" class="btn btn-outline">Lancer le solo</button>
             </section>
+            <section class="card">
+              <h2>Tutoriel</h2>
+              <p class="muted">Les règles en images, en une minute.</p>
+              <button id="home-tutorial" type="button" class="btn btn-outline">Voir le tutoriel</button>
+            </section>
           </div>
         </div>
       </section>
@@ -165,6 +170,29 @@
         </div>
       </section>
     </div>
+    <!-- Tutoriel : fenêtre modale ouverte depuis l'accueil (src/tutorial.ts). -->
+    <dialog id="tutorial" class="tuto" aria-labelledby="tuto-title">
+      <div class="tuto-head">
+        <span id="tuto-count" class="tuto-count"></span>
+        <button id="tuto-close" type="button" class="tuto-close" aria-label="Fermer le tutoriel">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 3 L15 15 M15 3 L3 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"></path></svg>
+        </button>
+      </div>
+      <div class="tuto-body">
+        <div id="tuto-illus" class="tuto-illus" aria-hidden="true"></div>
+        <div class="tuto-text">
+          <h2 id="tuto-title" class="tuto-title"></h2>
+          <p id="tuto-desc" class="tuto-desc"></p>
+        </div>
+      </div>
+      <div class="tuto-foot">
+        <div id="tuto-dots" class="tuto-dots" role="group" aria-label="Étapes"></div>
+        <div class="tuto-nav">
+          <button id="tuto-prev" type="button" class="btn btn-outline">Précédent</button>
+          <button id="tuto-next" type="button" class="btn btn-primary">Suivant</button>
+        </div>
+      </div>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
