@@ -623,10 +623,10 @@ p {
   gap: 8px;
 }
 
-/* Une ligne par joueur : rang, pastille, nom (et couronne du gagnant), PV, cases ; chaque colonne alignée. */
+/* Une ligne par joueur : rang, pastille, nom (et couronne du gagnant), cases ; chaque colonne alignée. */
 .score-row {
   display: grid;
-  grid-template-columns: 1.2em 18px minmax(0, 1fr) 4.6em 4.8em;
+  grid-template-columns: 1.2em 18px minmax(0, 1fr) 4.8em;
   align-items: center;
   gap: 10px;
   min-height: 40px;
@@ -656,7 +656,6 @@ p {
   white-space: nowrap;
 }
 
-.score-hp,
 .score-cells {
   font-size: 14px;
   white-space: nowrap;

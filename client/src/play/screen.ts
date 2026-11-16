@@ -162,14 +162,12 @@ export function startPlay(options: {
       text.textContent = p.id === session.you ? `${p.name} (vous)` : p.name;
       name.append(text);
       if (p.id === winner) name.append(crown());
-      const hp = document.createElement("span");
-      hp.className = "score-hp";
-      hp.textContent = session.alive.get(p.id) === false ? "éliminé" : `${session.hp.get(p.id) ?? 0} PV`;
+      // Pas de PV ici : ils sont dans le bandeau au-dessus de la grille. Un joueur éliminé est atténué.
       const score = document.createElement("span");
       score.className = "score-cells";
       const n = session.score.get(p.id) ?? 0;
       score.textContent = `${n} ${n > 1 ? "cases" : "case"}`;
-      row.append(rank, dot, name, hp, score);
+      row.append(rank, dot, name, score);
       return row;
     });
     $("game-scores").replaceChildren(...rows);
