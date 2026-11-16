@@ -15,6 +15,27 @@ export interface PlayController {
   destroy(): void;
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Couronne du gagnant : un seul polygone jaune, bandeau à coins carrés, deux pointes en triangle rectangle
+ * sur les côtés et une au milieu (d'un seul tenant : deux formes accolées laisseraient un trait de fond).
+ */
+function crown(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "crown");
+  svg.setAttribute("width", "22");
+  svg.setAttribute("height", "13");
+  svg.setAttribute("viewBox", "0 0 40 24");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Gagnant");
+  const shape = document.createElementNS(SVG_NS, "polygon");
+  shape.setAttribute("points", "4,21 4,3 14,14 20,3 26,14 36,3 36,21");
+  shape.setAttribute("fill", "#FFC107");
+  svg.append(shape);
+  return svg;
+}
+
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
   if (el === null) throw new Error(`élément #${id} absent`);
@@ -106,22 +127,41 @@ export function startPlay(options: {
     else view = v;
   });
 
+  /**
+   * Panneau des joueurs (00-Game §1, Fin de partie) : pendant la partie, classés par cases remplies (à
+   * égalité, l'ordre de la salle) ; une fois la partie finie, dans l'ordre du classement final, avec la
+   * couronne du gagnant à droite de son nom. Le fond gris de la fin ne répète pas ce classement.
+   */
   const renderPanel = (): void => {
     const remaining = session.owner.filter((o) => o === 0).length;
     $("game-level").textContent = `${LEVEL_LABEL[session.level]} · ${remaining} cases à remplir`;
-    const rows = session.players.map((p) => {
+    const ranking = session.ranking;
+    const ordered =
+      ranking !== null
+        ? ranking.map((r) => session.players.find((p) => p.id === r.player)).filter((p) => p !== undefined)
+        : session.players.slice().sort((a, b) => (session.score.get(b.id) ?? 0) - (session.score.get(a.id) ?? 0));
+    // Provisoire : en solo, pas de couronne pour un joueur éliminé.
+    const winner = ranking !== null && ranking.length > 0 && (ranking[0]!.alive || ranking.length > 1) ? ranking[0]!.player : null;
+    const rows = ordered.map((p, k) => {
       const c = playerColor(p.color);
       const row = document.createElement("div");
       row.className = "score-row";
       row.style.background = c.tint;
       row.style.color = c.ink;
       if (session.alive.get(p.id) === false) row.classList.add("out");
+      const rank = document.createElement("span");
+      rank.className = "score-rank";
+      rank.textContent = String(k + 1);
       const dot = document.createElement("span");
       dot.className = "swatch-dot";
       dot.style.background = c.color;
       const name = document.createElement("span");
       name.className = "score-name";
-      name.textContent = p.id === session.you ? `${p.name} (vous)` : p.name;
+      const text = document.createElement("span");
+      text.className = "score-name-text";
+      text.textContent = p.id === session.you ? `${p.name} (vous)` : p.name;
+      name.append(text);
+      if (p.id === winner) name.append(crown());
       const hp = document.createElement("span");
       hp.className = "score-hp";
       hp.textContent = session.alive.get(p.id) === false ? "éliminé" : `${session.hp.get(p.id) ?? 0} PV`;
@@ -129,21 +169,11 @@ export function startPlay(options: {
       score.className = "score-cells";
       const n = session.score.get(p.id) ?? 0;
       score.textContent = `${n} ${n > 1 ? "cases" : "case"}`;
-      row.append(dot, name, hp, score);
+      row.append(rank, dot, name, hp, score);
       return row;
     });
     $("game-scores").replaceChildren(...rows);
-
-    if (session.ranking !== null) {
-      const lines = session.ranking.map((r, k) => {
-        const li = document.createElement("li");
-        const p = session.players.find((q) => q.id === r.player);
-        li.textContent = `${k + 1}. ${p?.name ?? "?"} — ${r.score} ${r.score > 1 ? "cases" : "case"}${r.alive ? "" : " (éliminé)"}`;
-        return li;
-      });
-      $("game-ranking").replaceChildren(...lines);
-      $("game-end").hidden = false;
-    }
+    if (ranking !== null) $("game-end").hidden = false;
   };
   session.onChange = renderPanel;
 

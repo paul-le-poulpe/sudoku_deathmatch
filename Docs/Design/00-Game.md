@@ -46,7 +46,20 @@ Décidé par l'auteur le 15 novembre 2026.
   étiquette du même aspect que ce bouton dit « L'hôte peut relancer » (décidé
   le 16 novembre 2026).
 
+  Panneau des joueurs, à droite de la grille (décidé le 16 novembre 2026) :
+  pendant la partie, les joueurs y sont classés par nombre de cases remplies ;
+  une fois la partie finie, c'est lui qui montre le classement (le fond gris
+  ne le répète pas), avec les couleurs des joueurs, et une couronne jaune à
+  droite du nom du gagnant, qui grossit et rapetisse en boucle. La couronne
+  n'apparaît qu'en fin de partie.
+
   Provisoire :
+  - le rang s'affiche aussi pendant la partie ; à égalité de cases, l'ordre de
+    la salle ;
+  - en solo, un joueur éliminé n'a pas de couronne ;
+  - couronne : un seul polygone `#FFC107` (bandeau à coins carrés, deux pointes
+    en triangle rectangle sur les côtés, une au milieu), de 100 % à 140 % en
+    0,9 s, avec accélération et décélération douces ;
   - deux survivants avec autant de cases, ou deux joueurs éliminés au même
     tick : le premier est celui qui a rempli le plus de cases, puis l'ordre de
     la salle ;

@@ -623,8 +623,10 @@ p {
   gap: 8px;
 }
 
+/* Une ligne par joueur : rang, pastille, nom (et couronne du gagnant), PV, cases ; chaque colonne alignée. */
 .score-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1.2em 18px minmax(0, 1fr) 4.6em 4.8em;
   align-items: center;
   gap: 10px;
   min-height: 40px;
@@ -637,11 +639,51 @@ p {
   opacity: 0.55;
 }
 
+.score-rank {
+  font-size: 14px;
+}
+
 .score-name {
-  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.score-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .score-hp,
 .score-cells {
   font-size: 14px;
+  white-space: nowrap;
+}
+
+.score-cells {
+  text-align: right;
+}
+
+/* Couronne du gagnant, en fin de partie seulement : elle grossit et rapetisse doucement, en boucle. */
+.crown {
+  flex: none;
+  transform-origin: 50% 60%;
+  animation: crown-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes crown-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crown {
+    animation: none;
+  }
 }
