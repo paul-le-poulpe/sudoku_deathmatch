@@ -119,9 +119,8 @@ export class Room {
 
   /**
    * Un tick : la partie avance, chaque joueur connecté reçoit son `snapshot` (positions communes, `ack`
-   * propre) et, s'il s'est passé quelque chose qu'il peut voir, un message `events`. La pose d'une mine
-   * et une pose refusée ne vont qu'au joueur concerné (01-Architecture §3, Pièges cachés). Rien avant le
-   * lancement ni après la fin.
+   * propre) et, s'il s'est passé quelque chose qu'il peut voir, un message `events`. Une pose refusée ne
+   * va qu'au joueur concerné. Rien avant le lancement ni après la fin.
    */
   step(): Outgoing[] {
     const match = this.#match;
@@ -304,7 +303,6 @@ export class Room {
 
 /** Le seul joueur qui peut recevoir cet événement, ou `null` s'il va à tous. */
 function privateTo(ev: GameEvent): number | null {
-  if (ev.type === "placed" && ev.kind === "mine") return ev.player;
   if (ev.type === "not_placed") return ev.player;
   return null;
 }

@@ -44,19 +44,59 @@ Provisoire :
 
 ## 2. La mine
 
-Décidé par l'auteur le 15 novembre 2026 :
+Décidé par l'auteur le 15 novembre 2026, pose revue le 16 novembre 2026 :
 
-- **Le poseur la voit** : un carré inscrit dans le carré de la case, autour du
-  chiffre.
-- **Les autres ne la voient pas** : la case garde son aspect, avec la couleur
-  du poseur, comme une case remplie sans piège.
+- **Dessin** : un carré inscrit dans le carré de la case, autour du chiffre.
+- **La pose se voit, par tous** : un grand cadre de la taille de la grille se
+  resserre jusqu'au carré de la mine, sur la case.
+- **La mine reste ensuite visible pour tous pendant 2 s.** Pendant ces 2 s,
+  elle ne peut pas exploser.
+- **Puis la case se retourne**, comme une carte : d'un côté la mine, de
+  l'autre la case normale. Après le retournement, les autres joueurs voient la
+  case comme un chiffre donné au départ (fond gris, chiffre noir),
+  indiscernable des chiffres donnés ; le poseur, lui, voit sa mine en
+  pointillés, sur sa case de sa couleur (décidé le 16 novembre 2026).
+- **Révélation toutes les 10 s** (décidé le 16 novembre 2026) : pendant 1,5 s
+  sur 10, chaque joueur voit toutes les mines adverses avec la même apparence
+  que ses propres mines (case de la couleur du poseur, carré en pointillés de
+  sa couleur) ; les 8,5 autres secondes, elles sont camouflées en chiffres
+  donnés.
+  Un seul cycle pour toutes les mines de la partie, quel que soit le moment de
+  leur pose.
 - **Un adversaire qui marche dessus** déclenche une petite explosion et perd
   1 PV.
-- **Usage unique**, pour l'instant : la mine disparaît en explosant.
+- **Recharge** (décidé le 16 novembre 2026) : une mine qui explose reste sur
+  sa case et devient inactive pendant 20 s. Elle est visible pour tous, à
+  moitié transparente (50 %), et ne blesse personne. Après ces 20 s, sa pose
+  se rejoue : le cadre se resserre, la mine reste 2 s visible, puis la case se
+  retourne.
+
+Implémenté le 16 novembre 2026 (réseau : `01-Architecture.md` §3, Mines).
+Maquettes : planches « Mine : pose visible, puis retournement » et « Mines :
+révélation 1,5 s toutes les 10 s » de l'artifact « Sudoku Deathmatch —
+pièges ».
 
 Provisoire :
+- Durées : cadre qui se resserre 0,6 s, retournement 0,45 s.
+- La mine peut exploser à partir de la fin du retournement (aussi après une
+  recharge).
+- La case retournée compte toujours dans les cases du poseur (classement,
+  panneau des joueurs).
+- Pendant la recharge, la case a la couleur du poseur pour tous, et seul le
+  carré plein est à 50 % ; la révélation ne change rien à une mine en
+  recharge.
+- Le retournement se voit aussi chez le poseur : sa case passe de la mine
+  pleine à la mine en pointillés.
+- Cycle de révélation : il part du lancement de la partie ; les mines sont
+  visibles de 8,5 s à 10 s de chaque période de 10 s (ticks 170 à 199 modulo
+  200), au tick de l'hôte où le client dessine les pièges.
+- Passage du camouflage à la mine et retour : fondu de 0,15 s, sans
+  retournement.
+- Une mine reste active pendant sa révélation.
+- Une mine encore dans ses 2 s visibles après la pose garde son carré plein
+  pendant une révélation.
 - La mine explose quand le centre d'un bonhomme adverse entre dans la case.
-- Après l'explosion, la case peut recevoir un autre piège.
+- Pointillés : traits de 5 px, espaces de 3,5 px.
 - Dessin : le carré de la maquette (implémenté), parmi trois (carré, losange,
   coins). Le carré se confond avec le cadre qui marque la case de son propre
   bonhomme (même couleur, 2 px du bord), le losange et les coins non.

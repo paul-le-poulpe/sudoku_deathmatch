@@ -136,9 +136,8 @@ résultat. Un client ne décide jamais de sa position ni d'une case remplie.
 Seule exception : le client signale lui-même qu'un projectile ou
 un piège visible touche son propre bonhomme (un signalement ne fait du tort
 qu'à lui), et l'hôte détecte aussi les contacts évidents, pour qu'un client qui
-ne signale rien ne soit pas invincible. Un piège caché (la mine) est détecté
-par l'hôte, et sa position n'est envoyée qu'à son poseur
-(`01-Architecture.md` §3, Pièges et projectiles).
+ne signale rien ne soit pas invincible. Le contact avec une mine est détecté
+par l'hôte (`01-Architecture.md` §3, Pièges et projectiles).
 **La solution de la grille ne quitte jamais l'hôte** : elle n'entre dans aucun
 message, et `packages/catalog` (les grilles des parties en ligne) n'est jamais
 importé par `client/`, ni directement ni par un autre paquet : le code de la

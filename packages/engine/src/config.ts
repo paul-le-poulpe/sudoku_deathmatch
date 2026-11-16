@@ -36,6 +36,26 @@ export const TURRET_FIRST_TICKS = 20;
 export const TURRET_INTERVAL_TICKS = 60;
 export const BALL_CHARGE_TICKS = 20;
 /**
+ * Mine (03-Pieges §2), en ticks depuis la pose : le cadre se resserre (0,6 s), la mine reste visible pour
+ * tous (2 s, décidé), la case se retourne (0,45 s). Elle ne peut exploser qu'à la fin du retournement.
+ */
+export const MINE_SHRINK_TICKS = 12;
+export const MINE_SHOWN_TICKS = 40;
+export const MINE_FLIP_TICKS = 9;
+export const MINE_ARM_TICKS = MINE_SHRINK_TICKS + MINE_SHOWN_TICKS + MINE_FLIP_TICKS;
+/**
+ * Une mine qui explose se recharge pendant 20 s (décidé) : visible à moitié transparente pour tous,
+ * inoffensive, puis sa pose se rejoue (cadre, 2 s visible, retournement).
+ */
+export const MINE_REST_TICKS = 400;
+/**
+ * Révélation des mines adverses (03-Pieges §2, décidé : 1,5 s toutes les 10 s, un seul cycle pour toute la
+ * partie) : visibles quand le tick, modulo MINE_CYCLE_TICKS, est au moins MINE_REVEAL_FROM.
+ */
+export const MINE_CYCLE_TICKS = 200;
+export const MINE_REVEAL_FROM = 170;
+
+/**
  * Contrôle de l'hôte (01-Architecture §3, Pièges et projectiles) : il compte lui-même un contact quand les
  * centres sont à moins de BALL_CONTACT − HIT_CONTROL_MARGIN, même si le client ne l'a pas signalé.
  */

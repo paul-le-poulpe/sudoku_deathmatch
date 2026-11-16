@@ -1,7 +1,6 @@
 // La partie, côté hôte : grille, bonshommes, remplissage, PV, élimination, fin (00-Game §1 et §2), pièges
 // (03-Pieges). Aucune API de plateforme, aucune horloge : le temps est le numéro de tick (CLAUDE.md,
-// règle 2). La solution et les mines de chacun sont dans l'état : cet état n'existe que chez l'hôte et
-// n'est jamais envoyé tel quel.
+// règle 2). La solution est dans l'état : cet état n'existe que chez l'hôte et n'est jamais envoyé tel quel.
 
 import { ballAt, ballOut, cellCenter, directionPerMille, within } from "./ball.ts";
 import {
@@ -10,6 +9,8 @@ import {
   CELL,
   FILL_TOLERANCE,
   HIT_CONTROL_MARGIN,
+  MINE_ARM_TICKS,
+  MINE_REST_TICKS,
   SPAWNS,
   START_HP,
   TURRET_FIRST_TICKS,
@@ -42,6 +43,11 @@ export interface Trap {
   readonly cell: number;
   readonly kind: TrapKind;
   readonly owner: number;
+  /**
+   * Tick de la pose. Une mine ne peut exploser qu'à partir de `placed + MINE_ARM_TICKS`. Quand elle
+   * explose, `placed` passe 20 s dans le futur : elle se recharge, puis sa pose se rejoue.
+   */
+  placed: number;
   /** Tourelle : tick où sa prochaine boule apparaît. Mine : inutilisé. */
   nextBall: number;
 }
@@ -218,7 +224,13 @@ function applyPlace(game: Game, place: PlaceRequest, events: EngineEvent[]): voi
     events.push({ type: "not_placed", cell: place.cell, player: p.id });
     return;
   }
-  game.traps.push({ cell: place.cell, kind: place.kind, owner: p.id, nextBall: place.kind === "turret" ? game.tick + TURRET_FIRST_TICKS : 0 });
+  game.traps.push({
+    cell: place.cell,
+    kind: place.kind,
+    owner: p.id,
+    placed: game.tick,
+    nextBall: place.kind === "turret" ? game.tick + TURRET_FIRST_TICKS : 0,
+  });
   events.push({ type: "placed", cell: place.cell, kind: place.kind, player: p.id });
 }
 
@@ -306,14 +318,20 @@ function controlBalls(game: Game, events: EngineEvent[]): void {
   }
 }
 
-/** Mines : un bonhomme adverse dont le centre entre dans la case la fait exploser (03-Pieges §2). */
+/**
+ * Mines : un bonhomme adverse dont le centre entre dans la case la fait exploser (03-Pieges §2), mais
+ * seulement après la pose visible et le retournement (MINE_ARM_TICKS). Elle ne disparaît pas : elle se
+ * recharge pendant MINE_REST_TICKS (sa pose est reportée d'autant), puis sa pose se rejoue.
+ */
 function stepMines(game: Game, events: EngineEvent[]): void {
   for (const p of game.players) {
     if (!p.alive) continue;
     const cell = cellAt(p.x, p.y);
-    const i = game.traps.findIndex((t) => t.kind === "mine" && t.cell === cell && t.owner !== p.id);
-    if (i < 0) continue;
-    game.traps.splice(i, 1);
+    const mine = game.traps.find(
+      (t) => t.kind === "mine" && t.cell === cell && t.owner !== p.id && game.tick >= t.placed + MINE_ARM_TICKS,
+    );
+    if (mine === undefined) continue;
+    mine.placed = game.tick + MINE_REST_TICKS;
     damage(game, p, events, (hp) => ({ type: "exploded", cell, player: p.id, hp }));
   }
 }

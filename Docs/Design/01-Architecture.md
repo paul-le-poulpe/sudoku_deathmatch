@@ -176,8 +176,8 @@ l'hôte calculent la même trajectoire, tick par tick, et la prédiction n'a rie
 - `events {tick, events}`, seulement pour un tick où il s'est passé quelque
   chose qui ne se déduit pas des positions : case remplie (case, chiffre,
   joueur) ; chiffre refusé (joueur, case, PV restants) ; bonhomme éliminé
-  (joueur) ; fin de partie (classement) ; piège posé (`placed`, une mine à son
-  seul poseur), pose refusée (`not_placed`, au seul joueur), mine qui explose
+  (joueur) ; fin de partie (classement) ; piège posé (`placed`), pose refusée
+  (`not_placed`, au seul joueur), mine qui explose et se recharge
   (`exploded`), boule qui apparaît (`ball`), part (`launched`), touche
   (`ball_hit`) ou disparaît faute de cible (`ball_gone`) (§3, Pièges et
   projectiles).
@@ -283,8 +283,8 @@ Celui des autres bonshommes peut paraître faux.
 Deux cas :
 - **un piège visible par tous** (la tourelle) **et ses projectiles** : le client
   détecte le contact avec son bonhomme, l'hôte contrôle (ci-dessous) ;
-- **un piège caché** (la mine, vue par son seul poseur) : l'hôte détecte
-  (ci-dessous, Pièges cachés).
+- **la mine**, camouflée chez les autres la plupart du temps : l'hôte détecte
+  (ci-dessous, Mines).
 
 - **Trajectoires calculables par tous.** L'hôte annonce chaque tir par un
   événement : projectile, point de départ, direction, vitesse, tick du départ.
@@ -335,18 +335,28 @@ Deux cas :
   autre bonhomme l'a pris. Deux joueurs peuvent alors chacun le voir toucher
   leur propre bonhomme (`03-Pieges.md` §4).
 
-**Pièges cachés.** Un client ne peut tester le contact qu'avec un piège dont il
-connaît la position, et une position reçue par la page se lit dans une page
-modifiée. Donc, pour la mine :
-- la pose est annoncée **au seul poseur** (événement, et `state` à la
-  reconnexion) ; les autres clients ne reçoivent rien, et la case garde son
-  aspect chez eux (`03-Pieges.md` §2) ;
-- **l'hôte détecte** l'entrée d'un bonhomme adverse dans la case, et annonce
-  l'explosion à tous (case, joueur touché, PV restants) ;
-- la règle de l'écran exact ne perd rien : la victime ne voit pas la mine.
-  Effet visible : l'explosion arrive sur l'écran de la victime environ un ping
-  après que son bonhomme est entré dans la case, quand il est déjà un peu plus
-  loin.
+**Mines.** Décidé par l'auteur le 16 novembre 2026 (`03-Pieges.md` §2) : la pose
+se voit par tous, la mine reste visible 2 s, puis la case se retourne et se
+camoufle chez les autres en chiffre donné, sauf pendant la révélation
+commune ; une mine qui explose se recharge 20 s, puis sa pose se rejoue.
+- **La pose est annoncée à tous** (`placed`, et `state` à la reconnexion, avec
+  le tick de la pose) : chacun l'a vue. Tous les clients connaissent donc la
+  position de chaque mine ; une page modifiée peut continuer de l'afficher
+  après le retournement.
+- **Tout se calcule à partir du tick de la pose** et des constantes de
+  `packages/engine/src/config.ts` (`MINE_*_TICKS`, `MINE_CYCLE_TICKS`,
+  `MINE_REVEAL_FROM`), au tick de l'hôte où le client dessine les pièges : le
+  cadre, les 2 s visibles, le retournement, la révélation. Les clients voient
+  donc tous la même chose au même tick de l'hôte, sans message de plus.
+- **L'hôte détecte** l'entrée d'un bonhomme adverse dans la case, seulement à
+  partir de `pose + MINE_ARM_TICKS` (fin du retournement), et annonce
+  l'explosion à tous (`exploded` : case, joueur touché, PV restants). Effet
+  visible : l'explosion arrive sur l'écran de la victime environ un ping après
+  que son bonhomme est entré dans la case.
+- **Recharge** : à l'explosion, l'hôte reporte la pose de la mine de
+  `MINE_REST_TICKS` (20 s) ; chaque client fait de même à partir du tick du
+  message `exploded`. Une pose dans le futur veut dire « en recharge » : la
+  mine est dessinée à 50 % pour tous, et l'hôte ne la déclenche pas.
 
 ### Remplissage, côté client
 
@@ -543,6 +553,12 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
    l'hôte sur la fenêtre de fin (`restart`), palette « Classique »
    (`client/src/colors.ts`). Vérifié : typecheck, build du client et du
    Worker. Pas vérifié : une partie jouée jusqu'au bout, une relance.
+6. **Fait (16 novembre 2026) : nouvelle mine** (`03-Pieges.md` §2, §3 Mines) :
+   pose annoncée à tous, cadre qui se resserre, 2 s visible et inactive,
+   retournement, pointillés pour le poseur, camouflage en chiffre donné pour
+   les autres avec révélation 1,5 s toutes les 10 s, recharge de 20 s après
+   une explosion. Vérifié : typecheck, build du client et du Worker. Pas
+   vérifié : une partie jouée.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -601,6 +617,14 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
 - **Barre des pièges** : boutons grisés quand la case sous le bonhomme n'est
   pas à lui ou a déjà un piège, relus toutes les 150 ms ; un clic ne prend pas
   le focus du clavier.
+- **Dessin de la mine** (`scene.ts`, `PlaySession.hazards`) : la session donne
+  pour chaque mine sa phase (`MineLook`), Phaser la dessine. Cadre de la pose :
+  calque au-dessus de tout, du bord de la grille au carré de la mine, trait de
+  6 à 2,5 px. Retournement : la case est redessinée sur un calque au-dessus des
+  lignes, de largeur `|cos|` et soulevée de 14 % au milieu, avec une ombre ;
+  son chiffre est rétréci de même et change de face à mi-course. Pointillés :
+  traits de 5 px, espaces de 3,5 px. Une mine dont la pose est à plus de 5
+  ticks dans le futur est en recharge.
 
 ## 10. Pièges
 
@@ -631,13 +655,15 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   calcul est en entiers, comme `move`.
 - **Retirer le contrôle de l'hôte** « puisque le client détecte » : un client
   modifié qui n'envoie jamais `hit` devient invincible.
-- **Envoyer la position d'une mine à tous** (dans l'événement de pose, dans
-  `state`) « pour que chaque client détecte lui-même » : une page modifiée
-  affiche toutes les mines. Seul le poseur la reçoit ; l'hôte détecte.
-- **Changer l'aspect d'une case minée chez les autres** (lui retirer la
-  couleur du poseur, par exemple) : les joueurs attentifs voient le
-  changement, et l'hôte devrait l'annoncer, donc une page modifiée le
-  saurait. Décidé par l'auteur le 15 novembre 2026 : la case ne change pas.
+- **Faire détecter les mines par le client** « puisqu'il connaît leur
+  position » : un client modifié ne signalerait jamais de contact. L'hôte
+  détecte les mines.
+- **Calculer la révélation ou le retournement avec l'horloge du navigateur**
+  (`Date.now()`, `performance.now()`) : chaque écran montrerait les mines à un
+  autre moment. Tout part du tick de la pose et du tick de l'hôte où le
+  client dessine les pièges (§3, Mines).
+- **Supprimer une mine qui explose** : elle se recharge et reste sur sa case
+  (`03-Pieges.md` §2) ; l'hôte reporte sa pose, les clients aussi.
 - **Croire que la position de l'hôte ne s'écarte de celle du client que si un
   paquet est perdu** : elle s'écarte d'un tick chaque fois qu'une entrée change
   de tick en arrivant (§3, Prédiction).

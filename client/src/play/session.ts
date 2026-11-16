@@ -4,7 +4,23 @@
 // cases, PV et éliminations viennent des événements de l'hôte. Seule exception : le contact entre son
 // bonhomme et une boule, que le client détecte et signale (01-Architecture §3, Pièges et projectiles).
 
-import { BALL_CHARGE_TICKS, BALL_CONTACT, CELL, ballAt, ballOut, cellAt, cellCenter, move, within } from "@sudoku-deathmatch/engine";
+import {
+  BALL_CHARGE_TICKS,
+  BALL_CONTACT,
+  CELL,
+  MINE_CYCLE_TICKS,
+  MINE_FLIP_TICKS,
+  MINE_REST_TICKS,
+  MINE_REVEAL_FROM,
+  MINE_SHOWN_TICKS,
+  MINE_SHRINK_TICKS,
+  ballAt,
+  ballOut,
+  cellAt,
+  cellCenter,
+  move,
+  within,
+} from "@sudoku-deathmatch/engine";
 import {
   TICK_MS,
   type ClientMessage,
@@ -30,6 +46,10 @@ const KEPT_SNAPSHOTS = 40;
 const PENDING_MS = 3000;
 /** Après un tir, le canon dessiné reste dans la direction de la boule pendant ce nombre de ticks. */
 const CANNON_HOLD_TICKS = 6;
+/** Fondu d'une mine adverse qui se révèle ou se camoufle (0,15 s, provisoire, 03-Pieges §2). */
+const MINE_FADE_TICKS = 3;
+/** Rebond du carré de la mine quand le cadre l'atteint (0,18 s). */
+const MINE_PULSE_TICKS = 3.6;
 
 export interface ViewPlayer {
   readonly id: number;
@@ -44,10 +64,29 @@ export interface ViewPlayer {
   readonly y: number;
 }
 
-/** Un piège connu de ce client : les tourelles de tous, ses propres mines (01-Architecture §3, Pièges cachés). */
+/** Un piège posé, et le tick de l'hôte où il l'a été. */
 export interface ClientTrap {
   readonly kind: TrapKind;
   readonly owner: number;
+  readonly placed: number;
+}
+
+/**
+ * Ce que montre une mine à cet instant (03-Pieges §2). `shrink` et `flip` : avancement, de 0 à 1, du cadre
+ * qui se resserre et du retournement, `null` hors de ces phases. `face` : la case hors retournement —
+ * `resting` (mine qui se recharge après une explosion : visible par tous, à moitié transparente),
+ * `plain` (case du poseur, pendant le cadre), `solid` (mine pleine), `dashed` (mine en pointillés, celles
+ * du joueur après le retournement), `given` (camouflée en chiffre donné). `reveal` : pour `given`, de 0 à
+ * 1 pendant la révélation. `back` : la face qui apparaît au retournement. `pulse` : rebond du carré quand
+ * le cadre l'atteint, de 1 à 0.
+ */
+export interface MineLook {
+  readonly shrink: number | null;
+  readonly flip: number | null;
+  readonly pulse: number;
+  readonly face: "resting" | "plain" | "solid" | "dashed" | "given";
+  readonly reveal: number;
+  readonly back: "dashed" | "given";
 }
 
 /** Un piège à dessiner ; (`ux`, `uy`) : direction du canon d'une tourelle, vecteur de longueur 1. */
@@ -57,6 +96,8 @@ export interface ViewTrap {
   readonly owner: number;
   readonly ux: number;
   readonly uy: number;
+  /** Mine seulement. */
+  readonly mine: MineLook | null;
 }
 
 /** Une boule à dessiner, en unités ; `progress` : avancement de la seconde d'attente, de 0 à 1. */
@@ -161,7 +202,7 @@ export class PlaySession {
   onMessage(msg: ServerMessage, now: number): void {
     if (msg.type === "state") this.#onState(msg);
     else if (msg.type === "snapshot") this.#onSnapshot(msg, now);
-    else if (msg.type === "events") this.#onEvents(msg.events, now);
+    else if (msg.type === "events") this.#onEvents(msg.events, msg.tick, now);
   }
 
   get youAlive(): boolean {
@@ -196,7 +237,7 @@ export class PlaySession {
       }
     }
     this.traps.clear();
-    for (const [cell, kind, player] of s.traps) this.traps.set(cell, { kind, owner: player });
+    for (const [cell, kind, player, placed] of s.traps) this.traps.set(cell, { kind, owner: player, placed });
     this.#balls.clear();
     for (const [ball, cell, player, launch, dx, dy] of s.balls) {
       this.#balls.set(ball, { cell, owner: player, launch, dx, dy, launched: dx !== 0 || dy !== 0 });
@@ -262,7 +303,7 @@ export class PlaySession {
     this.#pos = corrected;
   }
 
-  #onEvents(events: readonly GameEvent[], now: number): void {
+  #onEvents(events: readonly GameEvent[], tick: number, now: number): void {
     for (const ev of events) {
       switch (ev.type) {
         case "filled":
@@ -299,11 +340,15 @@ export class PlaySession {
           this.ranking = ev.ranking;
           break;
         case "placed":
-          this.traps.set(ev.cell, { kind: ev.kind, owner: ev.player });
-          this.fx.push({ kind: "placed", cell: ev.cell, player: ev.player });
+          this.traps.set(ev.cell, { kind: ev.kind, owner: ev.player, placed: tick });
+          // La mine a sa propre animation (le cadre qui se resserre) ; pas de particules.
+          if (ev.kind === "turret") this.fx.push({ kind: "placed", cell: ev.cell, player: ev.player });
           if (ev.player === this.you) {
             this.#placing.delete(ev.cell);
-            this.#say(ev.kind === "mine" ? "Mine posée : les autres ne la voient pas." : "Tourelle posée : première boule dans 1 s.", now);
+            this.#say(
+              ev.kind === "mine" ? "Mine posée : tout le monde la voit 2 s, puis elle se cache." : "Tourelle posée : première boule dans 1 s.",
+              now,
+            );
           }
           break;
         case "not_placed":
@@ -312,12 +357,16 @@ export class PlaySession {
             this.#say("Piège refusé : votre bonhomme n'est plus sur la case.", now);
           }
           break;
-        case "exploded":
-          this.traps.delete(ev.cell);
+        case "exploded": {
+          // La mine reste : elle se recharge 20 s, puis sa pose se rejoue (03-Pieges §2).
+          const trap = this.traps.get(ev.cell);
+          if (trap !== undefined) this.traps.set(ev.cell, { ...trap, placed: tick + MINE_REST_TICKS });
           this.hp.set(ev.player, ev.hp);
           this.fx.push({ kind: "exploded", cell: ev.cell, player: ev.player });
           if (ev.player === this.you) this.#say("Une mine : un PV de moins.", now);
+          else if (trap?.owner === this.you) this.#say("Votre mine a explosé : elle se recharge pendant 20 s.", now);
           break;
+        }
         case "ball":
           this.#balls.set(ev.ball, { cell: ev.cell, owner: ev.player, launch: ev.launch, dx: 0, dy: 0, launched: false });
           break;
@@ -470,28 +519,56 @@ export class PlaySession {
     for (const [cell, trap] of this.traps) {
       let ux = 0;
       let uy = -1;
-      if (trap.kind === "turret") {
-        const shot = shots.get(cell);
-        if (shot !== undefined) {
-          ux = shot.dx / 1000;
-          uy = shot.dy / 1000;
-        } else {
-          const [cx, cy] = cellCenter(cell);
-          let best = Infinity;
-          for (const p of players) {
-            if (!p.alive || p.id === trap.owner) continue;
-            const d = (p.x - cx) * (p.x - cx) + (p.y - cy) * (p.y - cy);
-            if (d === 0 || d >= best) continue;
-            best = d;
-            const len = Math.sqrt(d);
-            ux = (p.x - cx) / len;
-            uy = (p.y - cy) / len;
-          }
+      if (trap.kind === "mine") {
+        traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy, mine: this.#mineLook(trap, t) });
+        continue;
+      }
+      const shot = shots.get(cell);
+      if (shot !== undefined) {
+        ux = shot.dx / 1000;
+        uy = shot.dy / 1000;
+      } else {
+        const [cx, cy] = cellCenter(cell);
+        let best = Infinity;
+        for (const p of players) {
+          if (!p.alive || p.id === trap.owner) continue;
+          const d = (p.x - cx) * (p.x - cx) + (p.y - cy) * (p.y - cy);
+          if (d === 0 || d >= best) continue;
+          best = d;
+          const len = Math.sqrt(d);
+          ux = (p.x - cx) / len;
+          uy = (p.y - cy) / len;
         }
       }
-      traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy });
+      traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy, mine: null });
     }
     return { traps, balls };
+  }
+
+  /**
+   * Phases d'une mine au tick `t` de l'hôte (celui où les pièges sont dessinés) : cadre qui se resserre,
+   * mine pleine visible par tous, retournement, puis pointillés pour le poseur et camouflage pour les
+   * autres, sauf pendant la révélation commune à toutes les mines (03-Pieges §2).
+   */
+  #mineLook(trap: ClientTrap, t: number): MineLook {
+    const own = trap.owner === this.you;
+    const back = own ? "dashed" : "given";
+    // Pose plus loin dans le futur que l'avance possible de ce client : la mine se recharge après une
+    // explosion. Ses derniers ticks de recharge ouvrent déjà le cadre, qui commence alors un peu tôt.
+    if (trap.placed - t > 5) return { shrink: null, flip: null, pulse: 0, face: "resting", reveal: 0, back };
+    const e = Math.max(0, t - trap.placed);
+    const shown = MINE_SHRINK_TICKS + MINE_SHOWN_TICKS;
+    if (e < MINE_SHRINK_TICKS) return { shrink: e / MINE_SHRINK_TICKS, flip: null, pulse: 0, face: "plain", reveal: 0, back };
+    if (e < shown) {
+      const pulse = Math.max(0, 1 - (e - MINE_SHRINK_TICKS) / MINE_PULSE_TICKS);
+      return { shrink: null, flip: null, pulse, face: "solid", reveal: 0, back };
+    }
+    if (e < shown + MINE_FLIP_TICKS) return { shrink: null, flip: (e - shown) / MINE_FLIP_TICKS, pulse: 0, face: "solid", reveal: 0, back };
+    if (own) return { shrink: null, flip: null, pulse: 0, face: "dashed", reveal: 1, back };
+    const c = ((t % MINE_CYCLE_TICKS) + MINE_CYCLE_TICKS) % MINE_CYCLE_TICKS;
+    const fadeIn = Math.min(1, Math.max(0, (c - MINE_REVEAL_FROM) / MINE_FADE_TICKS));
+    const fadeOut = Math.min(1, Math.max(0, (MINE_CYCLE_TICKS - c) / MINE_FADE_TICKS));
+    return { shrink: null, flip: null, pulse: 0, face: "given", reveal: fadeIn * fadeOut, back };
   }
 
   #interpolated(id: number, renderTick: number): readonly [number, number] {

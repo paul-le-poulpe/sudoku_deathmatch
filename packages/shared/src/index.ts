@@ -96,7 +96,7 @@ export function cloudflareGamePath(id: string): string {
 
 // ---- pièges (03-Pieges) ----
 
-/** `mine` : vue par son seul poseur ; `turret` : vue par tous, tire des boules. */
+/** `mine` : vue par tous à la pose, puis camouflée chez les autres ; `turret` : vue par tous, tire des boules. */
 export const TRAP_KINDS = ["mine", "turret"] as const;
 export type TrapKind = (typeof TRAP_KINDS)[number];
 
@@ -186,11 +186,14 @@ export type GameEvent =
   | { readonly type: "ignored"; readonly cell: number; readonly player: number }
   | { readonly type: "eliminated"; readonly player: number }
   | { readonly type: "ended"; readonly ranking: readonly RankEntry[] }
-  /** Piège posé. Une mine n'est annoncée qu'à son poseur (01-Architecture §3, Pièges cachés). */
+  /** Piège posé, annoncé à tous ; il est posé au tick du message `events` (03-Pieges §2 pour la mine). */
   | { readonly type: "placed"; readonly cell: number; readonly kind: TrapKind; readonly player: number }
   /** Pose refusée : bonhomme trop loin de la case, case pas à lui ou déjà piégée. Au seul joueur. */
   | { readonly type: "not_placed"; readonly cell: number; readonly player: number }
-  /** Une mine explose sous `player`, à qui il reste `hp` PV ; elle disparaît. */
+  /**
+   * Une mine explose sous `player`, à qui il reste `hp` PV. Elle se recharge pendant MINE_REST_TICKS à
+   * partir du tick du message, puis sa pose se rejoue (03-Pieges §2).
+   */
   | { readonly type: "exploded"; readonly cell: number; readonly player: number; readonly hp: number }
   /** Une boule apparaît au centre de la tourelle `cell`, posée par `player` ; elle part au tick `launch`. */
   | { readonly type: "ball"; readonly ball: number; readonly cell: number; readonly player: number; readonly launch: number }
@@ -246,8 +249,8 @@ export type ServerMessage =
   /**
    * État complet de la partie, sans la solution : au lancement et à la reconnexion.
    * `givens` : 81 chiffres, `0` pour une case à remplir. `cells` : cases remplies par des joueurs.
-   * `traps` : les pièges, sauf les mines des autres joueurs. `balls` : les boules en cours, `dx` et `dy`
-   * à 0 tant qu'elles ne sont pas parties.
+   * `traps` : les pièges et le tick de leur pose. `balls` : les boules en cours, `dx` et `dy` à 0 tant
+   * qu'elles ne sont pas parties.
    */
   | {
       readonly type: "state";
@@ -257,7 +260,7 @@ export type ServerMessage =
       readonly players: readonly PlayerState[];
       readonly hpMax: number;
       readonly ranking: readonly RankEntry[] | null;
-      readonly traps: readonly (readonly [cell: number, kind: TrapKind, player: number])[];
+      readonly traps: readonly (readonly [cell: number, kind: TrapKind, player: number, placed: number])[];
       readonly balls: readonly (readonly [ball: number, cell: number, player: number, launch: number, dx: number, dy: number])[];
     }
   /**

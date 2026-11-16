@@ -4,9 +4,9 @@ Jeu multijoueur dans le navigateur, de 2 à 4 joueurs. L'arène est une grille d
 Sudoku : chaque joueur déplace un bonhomme sur la grille et écrit des chiffres
 dans les cases. Un chiffre juste colore la case de sa couleur ; un chiffre faux
 coûte un point de vie, et à 0 le bonhomme est éliminé. Sur une case qu'il a
-remplie, un joueur peut poser un piège : une mine, que les autres ne voient
-pas, ou une tourelle, qui tire des boules lentes sur l'adversaire le plus
-proche. La partie finit quand la grille est pleine ou qu'il ne reste qu'un
+remplie, un joueur peut poser un piège : une mine, que tout le monde voit
+2 s avant qu'elle se camoufle (elle se montre 1,5 s toutes les 10 s), ou une
+tourelle, qui tire des boules lentes sur l'adversaire le plus proche. La partie finit quand la grille est pleine ou qu'il ne reste qu'un
 bonhomme : le classement met d'abord les survivants (au nombre de cases
 remplies), puis les éliminés, du dernier au premier, et l'hôte peut relancer
 une partie.

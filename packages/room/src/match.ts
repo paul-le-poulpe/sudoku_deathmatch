@@ -135,17 +135,17 @@ export class Match {
     return [track.appliedSeq, this.game.tick - track.appliedTick];
   }
 
-  /**
-   * L'état complet pour le joueur `recipient`, sans la solution ni les mines des autres joueurs
-   * (message `state`, 01-Architecture §3, Pièges cachés).
-   */
+  /** L'état complet pour le joueur `recipient`, sans la solution (message `state`). */
   state(recipient: number): Extract<ServerMessage, { type: "state" }> {
     const g = this.game;
     const givens = Array.from(g.owner, (o, i) => (o === -1 ? g.digits[i]! : 0)).join("");
     const cells: [number, number, number][] = [];
     for (let i = 0; i < 81; i++) if (g.owner[i]! > 0) cells.push([i, g.digits[i]!, g.owner[i]!]);
     const players: PlayerState[] = g.players.map((p) => ({ id: p.id, x: p.x, y: p.y, dir: p.dir, hp: p.hp, alive: p.alive, score: p.score }));
-    const traps = g.traps.filter((t) => t.kind !== "mine" || t.owner === recipient).map((t): [number, TrapKind, number] => [t.cell, t.kind, t.owner]);
+    // Toutes les mines vont à tous : chacun a vu leur pose (03-Pieges §2). `recipient` reste pour un
+    // état propre à chaque joueur.
+    void recipient;
+    const traps = g.traps.map((t): [number, TrapKind, number, number] => [t.cell, t.kind, t.owner, t.placed]);
     const balls = g.balls.map((b): [number, number, number, number, number, number] => [b.id, b.cell, b.owner, b.launch, b.dx, b.dy]);
     return { type: "state", tick: g.tick, givens, cells, players, hpMax: START_HP, ranking: g.ranking, traps, balls };
   }
