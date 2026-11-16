@@ -165,6 +165,8 @@ export interface PlayerState {
   readonly y: number;
   readonly dir: number;
   readonly hp: number;
+  /** PV max : 4, ou 6 tant qu'il a moins de la moitié des cases du premier (00-Game §1). */
+  readonly hpMax: number;
   readonly alive: boolean;
   /** Cases remplies correctement. */
   readonly score: number;
@@ -179,17 +181,28 @@ export interface RankEntry {
 
 /** Ce qui s'est passé pendant un tick et ne se déduit pas des positions (01-Architecture §3). */
 export type GameEvent =
-  /** Chiffre juste : la case est à `player`, qui retrouve tous ses PV (`hp`). */
+  /**
+   * Chiffre juste : la case est à `player`, qui retrouve tous ses PV (`hp`). Précédé des `hp_max` des
+   * joueurs que ce chiffre fait passer en retard ou en sortir, lui compris.
+   */
   | { readonly type: "filled"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   /** Chiffre faux : refusé, `hp` est ce qui reste au joueur (1, ou 0 s'il n'en avait plus qu'un). */
   | { readonly type: "refused"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   /** Remplissage ignoré : case déjà remplie, ou bonhomme trop loin de la case pour l'hôte. Aucun PV perdu. */
   | { readonly type: "ignored"; readonly cell: number; readonly player: number }
+  /**
+   * PV max de `player` changés (00-Game §1) : 6 quand il passe sous la moitié des cases du premier (2 PV de
+   * plus), 4 quand il revient à la moitié ou plus (PV au-dessus retirés). `hp` : ses PV après le changement.
+   */
+  | { readonly type: "hp_max"; readonly player: number; readonly hpMax: number; readonly hp: number }
   | { readonly type: "eliminated"; readonly player: number }
   | { readonly type: "ended"; readonly ranking: readonly RankEntry[] }
   /** Piège posé, annoncé à tous ; il est posé au tick du message `events` (03-Pieges §2 pour la mine). */
   | { readonly type: "placed"; readonly cell: number; readonly kind: TrapKind; readonly player: number }
-  /** Pose refusée : bonhomme trop loin de la case, case pas à lui ou déjà piégée. Au seul joueur. */
+  /**
+   * Pose refusée : bonhomme trop loin de la case, case pas à lui ou déjà piégée, ou tourelle au-delà du
+   * tiers de ses cases. Au seul joueur.
+   */
   | { readonly type: "not_placed"; readonly cell: number; readonly player: number }
   /**
    * Une mine explose sous `player`, à qui il reste `hp` PV. Elle se recharge pendant MINE_REST_TICKS à
@@ -259,7 +272,6 @@ export type ServerMessage =
       readonly givens: string;
       readonly cells: readonly (readonly [cell: number, digit: number, player: number])[];
       readonly players: readonly PlayerState[];
-      readonly hpMax: number;
       readonly ranking: readonly RankEntry[] | null;
       readonly traps: readonly (readonly [cell: number, kind: TrapKind, player: number, placed: number])[];
       readonly balls: readonly (readonly [ball: number, cell: number, player: number, launch: number, dx: number, dy: number])[];

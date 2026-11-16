@@ -6,6 +6,7 @@ import { ballAt, ballOut, cellCenter, directionPerMille, within } from "./ball.t
 import {
   BALL_CHARGE_TICKS,
   BALL_CONTACT,
+  CATCH_UP_HP,
   CELL,
   FILL_TOLERANCE,
   HIT_CONTROL_MARGIN,
@@ -14,6 +15,7 @@ import {
   MINE_REST_TICKS,
   SPAWNS,
   START_HP,
+  TURRET_CELLS,
   TURRET_FIRST_TICKS,
   TURRET_INTERVAL_TICKS,
 } from "./config.ts";
@@ -27,6 +29,8 @@ export interface Player {
   y: number;
   dir: number;
   hp: number;
+  /** PV max : START_HP, plus CATCH_UP_HP tant qu'il a moins de la moitié des cases du premier. */
+  hpMax: number;
   alive: boolean;
   score: number;
   /** Tick de son élimination ; 0 tant qu'il est en vie. */
@@ -69,6 +73,7 @@ export type EngineEvent =
   | { readonly type: "filled"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   | { readonly type: "refused"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   | { readonly type: "ignored"; readonly cell: number; readonly player: number }
+  | { readonly type: "hp_max"; readonly player: number; readonly hpMax: number; readonly hp: number }
   | { readonly type: "eliminated"; readonly player: number }
   | { readonly type: "ended"; readonly ranking: readonly RankEntry[] }
   | { readonly type: "placed"; readonly cell: number; readonly kind: TrapKind; readonly player: number }
@@ -142,7 +147,7 @@ export function createGame(puzzle: ArrayLike<number>, solution: ArrayLike<number
   }
   const players = playerIds.map((id, k): Player => {
     const [x, y] = SPAWNS[k]!;
-    return { id, x, y, dir: 0, hp: START_HP, alive: true, score: 0, outTick: 0 };
+    return { id, x, y, dir: 0, hp: START_HP, hpMax: START_HP, alive: true, score: 0, outTick: 0 };
   });
   return { tick: 0, solution: Uint8Array.from(solution), digits, owner, players, traps: [], balls: [], lastBall: 0, ranking: null };
 }
@@ -209,8 +214,9 @@ function applyFill(game: Game, fill: FillRequest, events: EngineEvent[]): void {
     game.digits[fill.cell] = fill.digit;
     game.owner[fill.cell] = p.id;
     p.score++;
+    catchUp(game, events);
     // Un chiffre juste rend tous les PV (00-Game §1).
-    p.hp = START_HP;
+    p.hp = p.hpMax;
     events.push({ type: "filled", cell: fill.cell, digit: fill.digit, player: p.id, hp: p.hp });
     return;
   }
@@ -219,13 +225,37 @@ function applyFill(game: Game, fill: FillRequest, events: EngineEvent[]): void {
   damage(game, p, events, (hp) => ({ type: "refused", cell: fill.cell, digit: fill.digit, player: p.id, hp }), loss);
 }
 
-/** Pose : case remplie par ce joueur, sans piège, bonhomme dessus (même tolérance qu'un remplissage). */
+/**
+ * Joueurs en retard (00-Game §1), relus après chaque chiffre juste : seul moment où un nombre de cases
+ * change. En retard : moins de la moitié des cases du premier, éliminés compris (provisoire). Qui le
+ * devient reçoit CATCH_UP_HP PV et a ce maximum en plus ; qui cesse de l'être revient à START_HP, les PV
+ * au-dessus retirés. Les éliminés ne changent plus.
+ */
+function catchUp(game: Game, events: EngineEvent[]): void {
+  let top = 0;
+  for (const p of game.players) top = Math.max(top, p.score);
+  for (const p of game.players) {
+    if (!p.alive) continue;
+    const hpMax = 2 * p.score < top ? START_HP + CATCH_UP_HP : START_HP;
+    if (hpMax === p.hpMax) continue;
+    p.hp = hpMax > p.hpMax ? p.hp + (hpMax - p.hpMax) : Math.min(p.hp, hpMax);
+    p.hpMax = hpMax;
+    events.push({ type: "hp_max", player: p.id, hpMax, hp: p.hp });
+  }
+}
+
+/**
+ * Pose : case remplie par ce joueur, sans piège, bonhomme dessus (même tolérance qu'un remplissage) ; une
+ * tourelle de plus doit rester dans le tiers de ses cases (TURRET_CELLS).
+ */
 function applyPlace(game: Game, place: PlaceRequest, events: EngineEvent[]): void {
   const p = alivePlayer(game, place.player);
   if (p === undefined) return;
   if (!Number.isInteger(place.cell) || place.cell < 0 || place.cell > 80) return;
   if (place.kind !== "mine" && place.kind !== "turret") return;
-  if (game.owner[place.cell] !== p.id || game.traps.some((t) => t.cell === place.cell) || !near(p, place.cell)) {
+  const turrets = game.traps.filter((t) => t.kind === "turret" && t.owner === p.id).length;
+  const tooMany = place.kind === "turret" && TURRET_CELLS * (turrets + 1) > p.score;
+  if (game.owner[place.cell] !== p.id || game.traps.some((t) => t.cell === place.cell) || !near(p, place.cell) || tooMany) {
     events.push({ type: "not_placed", cell: place.cell, player: p.id });
     return;
   }

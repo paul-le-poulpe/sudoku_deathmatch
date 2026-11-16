@@ -21,6 +21,11 @@ export const FILL_TOLERANCE = 200;
 
 /** Points de vie au départ, et après chaque chiffre juste (00-Game §1). */
 export const START_HP = 4;
+/**
+ * PV max en plus d'un joueur en retard, qui a moins de la moitié des cases du premier (00-Game §1) : 6 au
+ * lieu de 4 tant qu'il l'est.
+ */
+export const CATCH_UP_HP = 2;
 
 // ---- pièges (03-Pieges, valeurs provisoires) ----
 
@@ -36,6 +41,8 @@ export const BALL_CONTACT = BALL_RADIUS + BODY_RADIUS;
  * (décidé) ; le cercle se resserre 1 s avant chaque tir, la boule n'est pas dessinée avant de partir.
  */
 export const TURRET_FIRST_TICKS = 20;
+/** Un joueur a au plus une tourelle par TURRET_CELLS cases qu'il a remplies : un tiers (décidé, 03-Pieges §3). */
+export const TURRET_CELLS = 3;
 export const TURRET_INTERVAL_TICKS = 120;
 export const BALL_CHARGE_TICKS = 20;
 /**

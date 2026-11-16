@@ -10,6 +10,8 @@ import {
   CELL,
   MINE_REST_TICKS,
   MINE_SHRINK_TICKS,
+  START_HP,
+  TURRET_CELLS,
   ballAt,
   ballOut,
   cellAt,
@@ -51,6 +53,7 @@ export interface ViewPlayer {
   readonly color: number;
   readonly you: boolean;
   readonly hp: number;
+  readonly hpMax: number;
   readonly alive: boolean;
   readonly score: number;
   /** Position à afficher, en unités du moteur. */
@@ -132,7 +135,8 @@ export class PlaySession {
   readonly digits = new Uint8Array(81);
   /** -1 : chiffre donné ; 0 : vide ; sinon le joueur qui l'a rempli. */
   readonly owner = new Int16Array(81);
-  hpMax = 0;
+  /** PV max de chaque joueur : 4, ou 6 tant qu'il a moins de la moitié des cases du premier (00-Game §1). */
+  readonly hpMax = new Map<number, number>();
   readonly hp = new Map<number, number>();
   readonly alive = new Map<number, boolean>();
   readonly score = new Map<number, number>();
@@ -209,10 +213,10 @@ export class PlaySession {
       this.digits[cell] = digit;
       this.owner[cell] = player;
     }
-    this.hpMax = s.hpMax;
     const positions = new Map<number, readonly [number, number]>();
     for (const p of s.players) {
       this.hp.set(p.id, p.hp);
+      this.hpMax.set(p.id, p.hpMax);
       this.alive.set(p.id, p.alive);
       this.score.set(p.id, p.score);
       this.#lastSeen.set(p.id, [p.x, p.y]);
@@ -291,8 +295,23 @@ export class PlaySession {
   }
 
   #onEvents(events: readonly GameEvent[], tick: number, now: number): void {
+    // Un chiffre juste qui change ses PV max : le message du changement reste, pas celui du chiffre.
+    let maxSaid = false;
     for (const ev of events) {
       switch (ev.type) {
+        case "hp_max":
+          this.hpMax.set(ev.player, ev.hpMax);
+          this.hp.set(ev.player, ev.hp);
+          if (ev.player === this.you) {
+            maxSaid = true;
+            this.#say(
+              ev.hpMax > START_HP
+                ? `Moins de la moitié des cases du premier : 2 PV de plus, ${ev.hpMax} au maximum.`
+                : `La moitié des cases du premier, ou plus : ${ev.hpMax} PV au maximum.`,
+              now,
+            );
+          }
+          break;
         case "filled":
           this.digits[ev.cell] = ev.digit;
           this.owner[ev.cell] = ev.player;
@@ -300,7 +319,7 @@ export class PlaySession {
           this.hp.set(ev.player, ev.hp);
           this.pending.delete(ev.cell);
           this.fx.push({ kind: "filled", cell: ev.cell, player: ev.player });
-          if (ev.player === this.you) this.#say(`${ev.digit} : accepté, PV au maximum.`, now);
+          if (ev.player === this.you && !maxSaid) this.#say(`${ev.digit} : accepté, PV au maximum.`, now);
           break;
         case "refused":
           this.hp.set(ev.player, ev.hp);
@@ -481,6 +500,7 @@ export class PlaySession {
         color: p.color,
         you: p.id === this.you,
         hp: this.hp.get(p.id) ?? 0,
+        hpMax: this.hpMax.get(p.id) ?? START_HP,
         alive: this.alive.get(p.id) === true,
         score: this.score.get(p.id) ?? 0,
         x: at[0],
@@ -584,11 +604,22 @@ export class PlaySession {
     this.#send({ type: "fill", cell, digit });
   }
 
-  /** Un piège peut être demandé sur la case sous son bonhomme : remplie par lui, sans piège (03-Pieges §1). */
-  canPlace(): boolean {
+  /**
+   * Un piège peut être demandé sur la case sous son bonhomme : remplie par lui, sans piège (03-Pieges §1) ;
+   * pour une tourelle, une de plus doit rester dans le tiers de ses cases (03-Pieges §3).
+   */
+  canPlace(kind: TrapKind): boolean {
     if (!this.ready || this.ranking !== null || !this.youAlive) return false;
     const cell = this.myCell();
+    if (kind === "turret" && !this.#turretAllowed()) return false;
     return this.owner[cell] === this.you && !this.traps.has(cell) && !this.#placing.has(cell);
+  }
+
+  /** Une tourelle de plus tient dans le tiers de ses cases (les poses en attente ne comptent pas : l'hôte vérifie). */
+  #turretAllowed(): boolean {
+    let turrets = 0;
+    for (const t of this.traps.values()) if (t.kind === "turret" && t.owner === this.you) turrets++;
+    return TURRET_CELLS * (turrets + 1) <= (this.score.get(this.you) ?? 0);
   }
 
   /** Touche ou bouton d'un piège : le poser sur la case sous son bonhomme. L'hôte décide. */
@@ -598,6 +629,9 @@ export class PlaySession {
     if (this.owner[cell] !== this.you) return this.#say("Un piège se pose sur une case que vous avez remplie.", now);
     if (this.traps.has(cell)) return this.#say("Cette case a déjà un piège.", now);
     if (this.#placing.has(cell)) return;
+    if (kind === "turret" && !this.#turretAllowed()) {
+      return this.#say(`Une tourelle pour ${TURRET_CELLS} cases remplies : remplissez-en d'autres.`, now);
+    }
     this.#placing.set(cell, now);
     this.#send({ type: "place", cell, kind });
   }

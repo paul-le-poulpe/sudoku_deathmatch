@@ -25,6 +25,17 @@ Décidé par l'auteur le 15 novembre 2026.
 - **Points de vie.** Chaque bonhomme a des points de vie (PV), 4 au départ
   (décidé le 16 novembre 2026, après un essai à 5 ; 3 avant). Les PV de chaque
   joueur sont affichés en haut de la grille. À 0 PV, le bonhomme est éliminé.
+- **Joueur en retard** (décidé le 16 novembre 2026). Un joueur qui a moins de
+  la moitié des cases du premier a 6 PV au maximum au lieu de 4 : il reçoit
+  2 PV quand il passe sous la moitié, et un chiffre juste le remet à 6. Quand
+  il revient à la moitié ou plus, son maximum redevient 4 et les PV au-dessus
+  de 4 lui sont retirés. Le bandeau des PV montre alors 6 pastilles.
+
+  Provisoire :
+  - le premier est celui qui a le plus de cases, éliminés compris ; un joueur
+    éliminé ne change plus ;
+  - « moins de la moitié » est strict : 3 cases contre 6 n'est pas en retard.
+    Dès que le premier a 1 case, ceux qui en ont 0 sont en retard.
 - **Remplir une case.** Un bonhomme qui se trouve sur une case vide peut y
   écrire un chiffre.
   - Chiffre juste : la case prend la couleur du joueur, et il retrouve tous

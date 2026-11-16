@@ -36,7 +36,7 @@ Provisoire :
 - Les pièges d'un joueur éliminé restent actifs.
 - En solo, il n'y a pas d'adversaire : une tourelle ne fait apparaître aucune
   boule, une mine n'explose jamais.
-- Pas d'autre limite qu'un piège par case, pas de coût.
+- Limites : un piège par case, et le nombre de tourelles (§3). Pas de coût.
 - Touches : en plus des boutons, la touche à gauche de Z (A en AZERTY, Q en
   QWERTY, `KeyQ`) pose une mine, celle à droite de Z (E, `KeyE`) une tourelle.
 - Les boutons des pièges sont grisés quand la pose est impossible ; une
@@ -88,6 +88,10 @@ Décidé par l'auteur le 15 novembre 2026 :
   le joueur le plus proche.
 - **La boule va lentement** : un joueur doit pouvoir l'éviter facilement.
 - **Cadence** : un tir toutes les 6 s (décidé le 16 novembre 2026).
+- **Nombre** : un joueur ne peut mettre une tourelle que sur un tiers de ses
+  cases (décidé le 16 novembre 2026) : sa n-ième tourelle demande 3 n cases
+  remplies (la première à 3 cases, la deuxième à 6). Au-delà, le bouton de la
+  tourelle est grisé, et une tentative affiche pourquoi.
 - **Avertissement** : environ une seconde avant le tir, un cercle se resserre
   au centre de la tourelle. La boule n'est pas dessinée avant de partir : elle
   cacherait le chiffre (décidé le 16 novembre 2026).
@@ -113,7 +117,8 @@ Provisoire :
 ## 4. Points ouverts
 
 - **Autres pièges** : lesquels ; ce qui rend un piège « disponible » (coût,
-  nombre par joueur, délai entre deux poses).
+  nombre par joueur, délai entre deux poses). La tourelle a déjà une limite
+  (§3), la mine aucune.
 - **Délai d'avertissement** pour un futur piège visible : il doit être plus
   long que le ping des joueurs, sinon un joueur peut être touché par un piège
   que son écran ne montre pas encore. Pour la tourelle, la seconde du cercle

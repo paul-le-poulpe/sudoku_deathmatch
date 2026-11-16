@@ -302,14 +302,17 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         h.fillRoundedRect(x0 + 4, 6, slot - 8, HUD_PX - 14, 10);
         h.lineStyle(p.you ? 2 : 1, p.you ? hexToInt(c.color) : LINE, alpha);
         h.strokeRoundedRect(x0 + 4, 6, slot - 8, HUD_PX - 14, 10);
-        for (let k2 = 0; k2 < session.hpMax; k2++) {
-          const cx = x0 + 22 + k2 * 22;
+        // Pastilles des PV, une par PV max (4, ou 6 en retard) : resserrées si elles débordent de la case.
+        const pitch = Math.min(22, (slot - 44) / Math.max(1, p.hpMax - 1));
+        const r = Math.min(7, (pitch - 4) / 2);
+        for (let k2 = 0; k2 < p.hpMax; k2++) {
+          const cx = x0 + 22 + k2 * pitch;
           if (k2 < p.hp) {
             h.fillStyle(hexToInt(c.color), alpha);
-            h.fillCircle(cx, 41, 7);
+            h.fillCircle(cx, 41, r);
           } else {
             h.lineStyle(2, 0xa8a29e, alpha);
-            h.strokeCircle(cx, 41, 7);
+            h.strokeCircle(cx, 41, r);
           }
         }
         let name = this.nameTexts.get(p.id);

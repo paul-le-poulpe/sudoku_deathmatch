@@ -101,9 +101,9 @@ export function startPlay(options: {
     // Le clic ne prend pas le focus : les flèches restent au jeu.
     b.addEventListener("mousedown", (e) => e.preventDefault());
     b.addEventListener("click", () => session.pressTrap(kind, performance.now()));
-    return b;
+    return { kind, button: b };
   });
-  $("game-traps").replaceChildren(...trapButtons);
+  $("game-traps").replaceChildren(...trapButtons.map((t) => t.button));
 
   const quit = (): void => options.onQuit();
   $("game-quit").onclick = quit;
@@ -181,8 +181,10 @@ export function startPlay(options: {
   const timer = setInterval(() => {
     const now = performance.now();
     message.textContent = now < session.messageUntil ? session.message : "";
-    const blocked = !session.canPlace();
-    for (const b of trapButtons) if (b.disabled !== blocked) b.disabled = blocked;
+    for (const { kind, button } of trapButtons) {
+      const blocked = !session.canPlace(kind);
+      if (button.disabled !== blocked) button.disabled = blocked;
+    }
   }, 150);
 
   return {

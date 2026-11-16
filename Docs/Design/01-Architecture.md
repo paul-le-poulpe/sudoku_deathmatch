@@ -175,15 +175,17 @@ l'hôte calculent la même trajectoire, tick par tick, et la prédiction n'a rie
     destinataire : le reste du message est le même pour tous.
 - `events {tick, events}`, seulement pour un tick où il s'est passé quelque
   chose qui ne se déduit pas des positions : case remplie (case, chiffre,
-  joueur) ; chiffre refusé (joueur, case, PV restants) ; bonhomme éliminé
+  joueur) ; chiffre refusé (joueur, case, PV restants) ; PV max d'un joueur
+  changés, quand il passe en retard ou en sort (`hp_max`, avec ses PV,
+  envoyé avant le `filled` qui l'a causé) ; bonhomme éliminé
   (joueur) ; fin de partie (classement) ; piège posé (`placed`), pose refusée
   (`not_placed`, au seul joueur), mine qui explose et se recharge
   (`exploded`), boule qui apparaît (`ball`), part (`launched`), touche
   (`ball_hit`) ou disparaît faute de cible (`ball_gone`) (§3, Pièges et
   projectiles).
   **Doit arriver** : un événement perdu ne se rattrape pas au message suivant.
-- `state {…}` : état complet de la partie (grille sans la solution, joueurs et
-  leurs PV, cases remplies et leur propriétaire), au lancement et à chaque
+- `state {…}` : état complet de la partie (grille sans la solution, joueurs,
+  leurs PV et leurs PV max, cases remplies et leur propriétaire), au lancement et à chaque
   reconnexion.
 
 ### Pourquoi les positions ne dérivent pas
@@ -566,6 +568,14 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
    donc pas le tutoriel : le refaire dans `style.css`. Vérifié : typecheck,
    build du client, absence du catalogue en ligne dans `client/dist`. Pas
    vérifié : l'affichage dans un navigateur.
+9. **Fait (16 novembre 2026) : tourelles limitées, joueurs en retard**
+   (`03-Pieges.md` §3, `00-Game.md` §1). Moteur : `TURRET_CELLS` et
+   `CATCH_UP_HP` (`config.ts`), refus de la tourelle en trop dans
+   `applyPlace`, `catchUp` après chaque chiffre juste. Réseau : événement
+   `hp_max`, `hpMax` dans chaque joueur de `state` (le `hpMax` commun de
+   `state` est retiré). Vérifié : typecheck, build du client et du Worker.
+   Pas vérifié : une partie jouée. Le tutoriel ne parle d'aucune des deux
+   règles.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -622,8 +632,10 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   l'affiche, et dans la direction de la boule pendant les 6 ticks qui suivent
   son départ.
 - **Barre des pièges** : boutons grisés quand la case sous le bonhomme n'est
-  pas à lui ou a déjà un piège, relus toutes les 150 ms ; un clic ne prend pas
-  le focus du clavier.
+  pas à lui ou a déjà un piège, et celui de la tourelle quand une de plus
+  dépasserait le tiers de ses cases (les poses en attente de réponse ne
+  comptent pas : l'hôte refuse l'excédent) ; relus toutes les 150 ms ; un clic
+  ne prend pas le focus du clavier.
 - **Dessin de la mine** (`scene.ts`, `PlaySession.hazards`) : la session donne
   pour chaque mine sa phase (`MineLook` : cadre de la pose, recharge, rebond),
   Phaser la dessine. Cadre à pointes : carré de 32 px au centre de la case,
@@ -632,8 +644,14 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   mine, trait de 6 à 2,5 px ; le cadre à pointes rebondit de 12 % quand il
   l'atteint. Une mine dont la pose est à plus de 5 ticks dans le futur est en
   recharge.
-- **Chiffre juste** : l'événement `filled` porte les PV du joueur, remis à
-  `START_HP` par l'hôte.
+- **Chiffre juste** : l'événement `filled` porte les PV du joueur, remis à son
+  maximum par l'hôte (`START_HP`, ou `START_HP + CATCH_UP_HP` en retard).
+- **Joueurs en retard** (`catchUp` dans `packages/engine/src/game.ts`) : relus
+  après chaque chiffre juste, seul moment où un nombre de cases change. Le
+  client ne les calcule pas lui-même : il prend `hpMax` dans `state` et
+  `hp_max`.
+- **Pastilles des PV** (`scene.ts`, `drawHud`) : une par PV max ; à 6 dans la
+  case d'un joueur parmi 4, elles se resserrent (pas et rayon réduits).
 
 ## 10. Pièges
 

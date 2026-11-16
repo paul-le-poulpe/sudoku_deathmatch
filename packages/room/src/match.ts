@@ -2,7 +2,7 @@
 // une direction appliquée par tick, remplissages dans l'ordre d'arrivée, moteur, snapshots et événements.
 // Comme `Room`, elle ne connaît ni horloge ni réseau : l'enveloppe appelle `step` à chaque tick.
 
-import { START_HP, createGame, step, type FillRequest, type Game, type HitRequest, type PlaceRequest } from "@sudoku-deathmatch/engine";
+import { createGame, step, type FillRequest, type Game, type HitRequest, type PlaceRequest } from "@sudoku-deathmatch/engine";
 import type { GameEvent, PlayerState, ServerMessage, TrapKind } from "@sudoku-deathmatch/shared";
 
 /** Entrées en attente au-delà desquelles l'hôte ne garde que la dernière (01-Architecture §3, provisoire). */
@@ -141,12 +141,12 @@ export class Match {
     const givens = Array.from(g.owner, (o, i) => (o === -1 ? g.digits[i]! : 0)).join("");
     const cells: [number, number, number][] = [];
     for (let i = 0; i < 81; i++) if (g.owner[i]! > 0) cells.push([i, g.digits[i]!, g.owner[i]!]);
-    const players: PlayerState[] = g.players.map((p) => ({ id: p.id, x: p.x, y: p.y, dir: p.dir, hp: p.hp, alive: p.alive, score: p.score }));
+    const players: PlayerState[] = g.players.map((p) => ({ id: p.id, x: p.x, y: p.y, dir: p.dir, hp: p.hp, hpMax: p.hpMax, alive: p.alive, score: p.score }));
     // Toutes les mines vont à tous : chacun a vu leur pose (03-Pieges §2). `recipient` reste pour un
     // état propre à chaque joueur.
     void recipient;
     const traps = g.traps.map((t): [number, TrapKind, number, number] => [t.cell, t.kind, t.owner, t.placed]);
     const balls = g.balls.map((b): [number, number, number, number, number, number] => [b.id, b.cell, b.owner, b.launch, b.dx, b.dy]);
-    return { type: "state", tick: g.tick, givens, cells, players, hpMax: START_HP, ranking: g.ranking, traps, balls };
+    return { type: "state", tick: g.tick, givens, cells, players, ranking: g.ranking, traps, balls };
   }
 }
