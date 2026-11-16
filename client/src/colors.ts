@@ -1,7 +1,8 @@
 // Couleurs des joueurs (indices de 0 à PLAYER_COLOR_COUNT − 1, `packages/shared`) : palette « Classique »
 // de la maquette « Sudoku Deathmatch — couleurs », choisie par l'auteur le 15 novembre 2026.
 // `color` : le bonhomme, ses PV et ses pièges (au moins 3:1 sur le blanc) ; `tint` : le fond d'une case
-// remplie (20 % de la couleur) ; `ink` : le chiffre sur ce fond (au moins 4,6:1).
+// remplie (20 % de la couleur) ; `ink` : le texte de sa couleur (nom dans le bandeau, panneau), au moins
+// 4,6:1 sur `tint`. Le chiffre d'une case remplie est noir (essai, scene.ts).
 
 export interface PlayerColor {
   readonly name: string;

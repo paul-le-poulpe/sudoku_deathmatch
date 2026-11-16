@@ -10,6 +10,7 @@ import {
   FILL_TOLERANCE,
   HIT_CONTROL_MARGIN,
   MINE_ARM_TICKS,
+  MINE_DAMAGE,
   MINE_REST_TICKS,
   SPAWNS,
   START_HP,
@@ -65,7 +66,7 @@ export interface Ball {
 }
 
 export type EngineEvent =
-  | { readonly type: "filled"; readonly cell: number; readonly digit: number; readonly player: number }
+  | { readonly type: "filled"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   | { readonly type: "refused"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   | { readonly type: "ignored"; readonly cell: number; readonly player: number }
   | { readonly type: "eliminated"; readonly player: number }
@@ -184,8 +185,8 @@ function alivePlayer(game: Game, id: number): Player | undefined {
 }
 
 /** Retire un PV à `p`, annonce `event(hp)`, puis l'élimination si c'était le dernier. */
-function damage(game: Game, p: Player, events: EngineEvent[], event: (hp: number) => EngineEvent): void {
-  p.hp--;
+function damage(game: Game, p: Player, events: EngineEvent[], event: (hp: number) => EngineEvent, amount = 1): void {
+  p.hp = Math.max(0, p.hp - amount);
   events.push(event(p.hp));
   if (p.hp <= 0) {
     p.alive = false;
@@ -208,7 +209,9 @@ function applyFill(game: Game, fill: FillRequest, events: EngineEvent[]): void {
     game.digits[fill.cell] = fill.digit;
     game.owner[fill.cell] = p.id;
     p.score++;
-    events.push({ type: "filled", cell: fill.cell, digit: fill.digit, player: p.id });
+    // Un chiffre juste rend tous les PV (00-Game §1).
+    p.hp = START_HP;
+    events.push({ type: "filled", cell: fill.cell, digit: fill.digit, player: p.id, hp: p.hp });
     return;
   }
   damage(game, p, events, (hp) => ({ type: "refused", cell: fill.cell, digit: fill.digit, player: p.id, hp }));
@@ -320,8 +323,9 @@ function controlBalls(game: Game, events: EngineEvent[]): void {
 
 /**
  * Mines : un bonhomme adverse dont le centre entre dans la case la fait exploser (03-Pieges §2), mais
- * seulement après la pose visible et le retournement (MINE_ARM_TICKS). Elle ne disparaît pas : elle se
- * recharge pendant MINE_REST_TICKS (sa pose est reportée d'autant), puis sa pose se rejoue.
+ * seulement quand le cadre de la pose a atteint la case (MINE_ARM_TICKS). Elle enlève MINE_DAMAGE PV. Elle
+ * ne disparaît pas : elle se recharge pendant MINE_REST_TICKS (sa pose est reportée d'autant), puis sa
+ * pose se rejoue.
  */
 function stepMines(game: Game, events: EngineEvent[]): void {
   for (const p of game.players) {
@@ -332,7 +336,7 @@ function stepMines(game: Game, events: EngineEvent[]): void {
     );
     if (mine === undefined) continue;
     mine.placed = game.tick + MINE_REST_TICKS;
-    damage(game, p, events, (hp) => ({ type: "exploded", cell, player: p.id, hp }));
+    damage(game, p, events, (hp) => ({ type: "exploded", cell, player: p.id, hp }), MINE_DAMAGE);
   }
 }
 

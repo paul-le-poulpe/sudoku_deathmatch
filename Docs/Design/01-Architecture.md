@@ -335,28 +335,25 @@ Deux cas :
   autre bonhomme l'a pris. Deux joueurs peuvent alors chacun le voir toucher
   leur propre bonhomme (`03-Pieges.md` §4).
 
-**Mines.** Décidé par l'auteur le 16 novembre 2026 (`03-Pieges.md` §2) : la pose
-se voit par tous, la mine reste visible 2 s, puis la case se retourne et se
-camoufle chez les autres en chiffre donné, sauf pendant la révélation
-commune ; une mine qui explose se recharge 20 s, puis sa pose se rejoue.
+**Mines.** Décidé par l'auteur le 16 novembre 2026 (`03-Pieges.md` §2) : la mine
+est toujours visible par tous ; à la pose, un grand cadre se resserre sur la
+case ; une mine qui explose se recharge 20 s, puis sa pose se rejoue.
 - **La pose est annoncée à tous** (`placed`, et `state` à la reconnexion, avec
-  le tick de la pose) : chacun l'a vue. Tous les clients connaissent donc la
-  position de chaque mine ; une page modifiée peut continuer de l'afficher
-  après le retournement.
+  le tick de la pose).
 - **Tout se calcule à partir du tick de la pose** et des constantes de
-  `packages/engine/src/config.ts` (`MINE_*_TICKS`, `MINE_CYCLE_TICKS`,
-  `MINE_REVEAL_FROM`), au tick de l'hôte où le client dessine les pièges : le
-  cadre, les 2 s visibles, le retournement, la révélation. Les clients voient
-  donc tous la même chose au même tick de l'hôte, sans message de plus.
-- **L'hôte détecte** l'entrée d'un bonhomme adverse dans la case, seulement à
-  partir de `pose + MINE_ARM_TICKS` (fin du retournement), et annonce
-  l'explosion à tous (`exploded` : case, joueur touché, PV restants). Effet
-  visible : l'explosion arrive sur l'écran de la victime environ un ping après
-  que son bonhomme est entré dans la case.
+  `packages/engine/src/config.ts` (`MINE_SHRINK_TICKS`, `MINE_ARM_TICKS`,
+  `MINE_REST_TICKS`), au tick de l'hôte où le client dessine les pièges : le
+  cadre qui se resserre, la recharge. Les clients voient donc tous la même
+  chose au même tick de l'hôte, sans message de plus.
+- **L'hôte détecte** l'entrée d'un bonhomme adverse dans la case, à partir de
+  `pose + MINE_ARM_TICKS` (le grand cadre a atteint la case), et annonce
+  l'explosion à tous (`exploded` : case, joueur touché, PV restants ; une mine
+  enlève `MINE_DAMAGE` PV). Effet visible : l'explosion arrive sur l'écran de
+  la victime environ un ping après que son bonhomme est entré dans la case.
 - **Recharge** : à l'explosion, l'hôte reporte la pose de la mine de
   `MINE_REST_TICKS` (20 s) ; chaque client fait de même à partir du tick du
   message `exploded`. Une pose dans le futur veut dire « en recharge » : la
-  mine est dessinée à 50 % pour tous, et l'hôte ne la déclenche pas.
+  mine est dessinée à 35 % pour tous, et l'hôte ne la déclenche pas.
 
 ### Remplissage, côté client
 
@@ -553,12 +550,13 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
    l'hôte sur la fenêtre de fin (`restart`), palette « Classique »
    (`client/src/colors.ts`). Vérifié : typecheck, build du client et du
    Worker. Pas vérifié : une partie jouée jusqu'au bout, une relance.
-6. **Fait (16 novembre 2026) : nouvelle mine** (`03-Pieges.md` §2, §3 Mines) :
-   pose annoncée à tous, cadre qui se resserre, 2 s visible et inactive,
-   retournement, pointillés pour le poseur, camouflage en chiffre donné pour
-   les autres avec révélation 1,5 s toutes les 10 s, recharge de 20 s après
-   une explosion. Vérifié : typecheck, build du client et du Worker. Pas
-   vérifié : une partie jouée.
+6. **Fait (16 novembre 2026) : mine camouflée** (commit `3105e12`), remplacée
+   le jour même par la suivante (`03-Pieges-History.md`).
+7. **Fait (16 novembre 2026) : mine toujours visible, tourelle, PV.** Mine en
+   cadre à pointes visible par tous, posée avec le grand cadre qui se resserre,
+   2 PV, recharge de 20 s ; tourelle qui tire toutes les 6 s, sans boule
+   dessinée avant le tir ; 4 PV (5 au premier essai), rendus par chaque chiffre juste. Vérifié :
+   typecheck, build du client et du Worker. Pas vérifié : une partie jouée.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -618,13 +616,15 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   pas à lui ou a déjà un piège, relus toutes les 150 ms ; un clic ne prend pas
   le focus du clavier.
 - **Dessin de la mine** (`scene.ts`, `PlaySession.hazards`) : la session donne
-  pour chaque mine sa phase (`MineLook`), Phaser la dessine. Cadre de la pose :
-  calque au-dessus de tout, du bord de la grille au carré de la mine, trait de
-  6 à 2,5 px. Retournement : la case est redessinée sur un calque au-dessus des
-  lignes, de largeur `|cos|` et soulevée de 14 % au milieu, avec une ombre ;
-  son chiffre est rétréci de même et change de face à mi-course. Pointillés :
-  traits de 5 px, espaces de 3,5 px. Une mine dont la pose est à plus de 5
-  ticks dans le futur est en recharge.
+  pour chaque mine sa phase (`MineLook` : cadre de la pose, recharge, rebond),
+  Phaser la dessine. Cadre à pointes : carré de 32 px au centre de la case,
+  trait de 2,5 px, deux pointes de 8 × 5 px au milieu de chaque côté. Cadre de
+  la pose : calque au-dessus de tout, du bord de la grille au cadre de la
+  mine, trait de 6 à 2,5 px ; le cadre à pointes rebondit de 12 % quand il
+  l'atteint. Une mine dont la pose est à plus de 5 ticks dans le futur est en
+  recharge.
+- **Chiffre juste** : l'événement `filled` porte les PV du joueur, remis à
+  `START_HP` par l'hôte.
 
 ## 10. Pièges
 
@@ -658,9 +658,9 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
 - **Faire détecter les mines par le client** « puisqu'il connaît leur
   position » : un client modifié ne signalerait jamais de contact. L'hôte
   détecte les mines.
-- **Calculer la révélation ou le retournement avec l'horloge du navigateur**
-  (`Date.now()`, `performance.now()`) : chaque écran montrerait les mines à un
-  autre moment. Tout part du tick de la pose et du tick de l'hôte où le
+- **Calculer le cadre de la pose ou la recharge d'une mine avec l'horloge du
+  navigateur** (`Date.now()`, `performance.now()`) : chaque écran montrerait
+  la mine à un autre moment. Tout part du tick de la pose et du tick de l'hôte où le
   client dessine les pièges (§3, Mines).
 - **Supprimer une mine qui explose** : elle se recharge et reste sur sa case
   (`03-Pieges.md` §2) ; l'hôte reporte sa pose, les clients aussi.

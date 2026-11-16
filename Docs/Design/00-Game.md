@@ -9,7 +9,8 @@ Documents thématiques :
   transformé au lancement) et comment sa difficulté est mesurée ; niveaux à
   décider.
 - `03-Pieges.md` — ce qu'un joueur pose sur ses cases pour gêner les autres :
-  pose, mine, tourelle ; ajoutés après la version 1.
+  pose, mine, tourelle ; ajoutés après la version 1. Règles remplacées, qui ne
+  font pas foi : `03-Pieges-History.md`.
 
 ---
 
@@ -21,12 +22,13 @@ Décidé par l'auteur le 15 novembre 2026.
 - **Joueurs.** 2 à 4 par partie. Chaque joueur contrôle un bonhomme.
 - **Déplacement.** Le bonhomme se déplace en continu sur la grille (pas case
   par case).
-- **Points de vie.** Chaque bonhomme a des points de vie (PV), 3 au départ. Les
-  PV de chaque joueur sont affichés en haut de la grille. À 0 PV, le bonhomme
-  est éliminé.
+- **Points de vie.** Chaque bonhomme a des points de vie (PV), 4 au départ
+  (décidé le 16 novembre 2026, après un essai à 5 ; 3 avant). Les PV de chaque
+  joueur sont affichés en haut de la grille. À 0 PV, le bonhomme est éliminé.
 - **Remplir une case.** Un bonhomme qui se trouve sur une case vide peut y
   écrire un chiffre.
-  - Chiffre juste : la case prend la couleur du joueur.
+  - Chiffre juste : la case prend la couleur du joueur, et il retrouve tous
+    ses PV (décidé le 16 novembre 2026).
   - Chiffre faux : il est refusé, la case reste vide, et le joueur perd 1 PV.
 - **Pas de coups.** Les bonshommes ne peuvent pas se frapper.
 - **Pièges** (ajoutés après la version 1). Une case remplie octroie au joueur des

@@ -3,10 +3,10 @@
 // (session.ts), qui les tient de l'hôte et de la prédiction. Phaser n'est chargé qu'au lancement d'une
 // partie (import dynamique).
 //
-// Dessins des pièges : ceux retenus par défaut dans la maquette « Sudoku Deathmatch — pièges »
-// (03-Pieges §2 et §3, provisoire) : mine en carré inscrit, tourelle en anneau avec un canon carré. La
-// mine suit les planches « Mine : pose visible, puis retournement » et « Mines : révélation » : cadre qui
-// se resserre, mine pleine, case qui se retourne comme une carte, puis pointillés ou camouflage.
+// Dessins des pièges (maquette « Sudoku Deathmatch — pièges », 03-Pieges §2 et §3) : mine en « cadre à
+// pointes », toujours visible, posée avec un grand cadre qui se resserre sur la case ; tourelle en anneau
+// avec un canon carré, et un cercle qui se resserre la seconde avant le tir (planche « Nouvelles mines et
+// tourelles »).
 
 import { BALL_RADIUS, GRID } from "@sudoku-deathmatch/engine";
 
@@ -38,8 +38,10 @@ function cellCenter(cell: number): [number, number] {
   return [(cell % 9) * CELL_PX + CELL_PX / 2, HUD_PX + Math.floor(cell / 9) * CELL_PX + CELL_PX / 2];
 }
 
-/** Côté du carré de la mine, au milieu de son trait de 2,5 px (le carré inscrit à 9 px du bord). */
-const MINE_SQUARE = 35.5;
+/** Cadre de la mine : carré de 32 px au centre de la case (12 px du bord), trait de 2,5 px vers l'intérieur. */
+const MINE_FRAME = 32;
+/** Opacité du cadre à pointes d'une mine en recharge (03-Pieges §2, essai de l'auteur : 35 %). */
+const RESTING_ALPHA = 0.35;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -49,32 +51,24 @@ function easeInOut(x: number): number {
   return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 }
 
-/** Couleur entre `a` et `b` (entiers 0xRRGGBB), `t` de 0 à 1. */
-function mixColor(a: number, b: number, t: number): number {
-  const ch = (shift: number): number => Math.round(lerp((a >> shift) & 255, (b >> shift) & 255, t)) << shift;
-  return ch(16) | ch(8) | ch(0);
-}
-
-function toHex(color: number): string {
-  return `#${color.toString(16).padStart(6, "0")}`;
-}
-
-/** Rectangle en pointillés : traits de `dash` px, espaces de `gap` px, chaque côté partant d'un coin. */
-function dashedRect(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, dash = 5, gap = 3.5): void {
-  const side = (x1: number, y1: number, x2: number, y2: number): void => {
-    const len = Math.hypot(x2 - x1, y2 - y1);
-    if (len === 0) return;
-    const ux = (x2 - x1) / len;
-    const uy = (y2 - y1) / len;
-    for (let d = 0; d < len; d += dash + gap) {
-      const e = Math.min(len, d + dash);
-      g.lineBetween(x1 + ux * d, y1 + uy * d, x1 + ux * e, y1 + uy * e);
-    }
-  };
-  side(x, y, x + w, y);
-  side(x + w, y, x + w, y + h);
-  side(x + w, y + h, x, y + h);
-  side(x, y + h, x, y);
+/**
+ * Cadre à pointes centré en (cx, cy), agrandi de `k` : le carré, et deux pointes de 8 px de large sur 5 de
+ * haut au milieu de chaque côté, vers l'extérieur (planche « Mine toujours visible »).
+ */
+function spikedFrame(g: Phaser.GameObjects.Graphics, cx: number, cy: number, color: number, alpha: number, k: number): void {
+  const h = (MINE_FRAME / 2) * k;
+  const w = 2.5 * k;
+  g.lineStyle(w, color, alpha);
+  g.strokeRoundedRect(cx - h + w / 2, cy - h + w / 2, 2 * h - w, 2 * h - w, 2 * k);
+  g.fillStyle(color, alpha);
+  const half = 4 * k;
+  const tip = 5 * k;
+  for (const o of [-8 * k, 8 * k]) {
+    g.fillTriangle(cx + o - half, cy - h, cx + o + half, cy - h, cx + o, cy - h - tip);
+    g.fillTriangle(cx + o - half, cy + h, cx + o + half, cy + h, cx + o, cy + h + tip);
+    g.fillTriangle(cx - h, cy + o - half, cx - h, cy + o + half, cx - h - tip, cy + o);
+    g.fillTriangle(cx + h, cy + o - half, cx + h, cy + o + half, cx + h + tip, cy + o);
+  }
 }
 
 export interface GameView {
@@ -92,12 +86,8 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     hud!: Phaser.GameObjects.Graphics;
     /** Boules : au-dessus des chiffres, sous les bonshommes. */
     balls!: Phaser.GameObjects.Graphics;
-    /** Cases de mine qui se retournent : au-dessus des lignes de la grille, sous les chiffres. */
-    cards!: Phaser.GameObjects.Graphics;
     /** Cadre de la pose d'une mine : au-dessus de tout. */
     overlay!: Phaser.GameObjects.Graphics;
-    /** Cases dont le chiffre est rétréci par un retournement, à remettre à l'échelle 1 après. */
-    readonly flipping = new Set<number>();
     readonly cellTexts: Phaser.GameObjects.Text[] = [];
     readonly cellCache: string[] = [];
     readonly nameTexts = new Map<number, Phaser.GameObjects.Text>();
@@ -130,7 +120,6 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
 
       this.board = this.add.graphics();
       this.hud = this.add.graphics();
-      this.cards = this.add.graphics().setDepth(4);
       this.balls = this.add.graphics().setDepth(8);
       this.overlay = this.add.graphics().setDepth(12);
       for (let i = 0; i < 81; i++) {
@@ -157,31 +146,17 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     drawBoard(now: number, traps: readonly ViewTrap[]): void {
       const b = this.board;
       b.clear();
-      const mines = new Map<number, ViewTrap>();
-      for (const t of traps) if (t.mine !== null) mines.set(t.cell, t);
       for (let i = 0; i < 81; i++) {
         const own = session.owner[i]!;
         let bg = own === -1 ? GIVEN_BG : EMPTY_BG;
         let ink = "#1C1917";
-        let weight = own === -1 ? "600" : own > 0 ? "700" : "500";
+        const weight = own === -1 ? "600" : own > 0 ? "700" : "500";
         let text = session.digits[i] ? String(session.digits[i]) : "";
         if (own > 0) {
+          // Case remplie : fond clair du joueur, chiffre noir en gras (essai de l'auteur, 16 novembre 2026 ;
+          // avant : chiffre dans la couleur `ink` du joueur).
           const c = playerColor(session.players.find((p) => p.id === own)?.color ?? 0);
           bg = hexToInt(c.tint);
-          ink = c.ink;
-        }
-        const mine = mines.get(i)?.mine;
-        if (mine !== undefined && mine !== null) {
-          const c = colorOf(mines.get(i)!.owner);
-          if (mine.flip !== null) {
-            // La carte (this.cards) se dessine par-dessus ; dessous, la place qu'elle libère.
-            bg = EMPTY_BG;
-          } else if (mine.face === "given") {
-            // Camouflée en chiffre donné ; pendant la révélation, fondu vers la case du poseur.
-            bg = mixColor(GIVEN_BG, hexToInt(c.tint), mine.reveal);
-            ink = toHex(mixColor(INK, hexToInt(c.ink), mine.reveal));
-            weight = mine.reveal >= 0.5 ? "700" : "600";
-          }
         }
         const pending = session.pending.get(i);
         if (own === 0 && pending !== undefined) {
@@ -220,9 +195,9 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       b.strokeRect(1.5, HUD_PX + 1.5, BOARD_PX - 3, BOARD_PX - 3);
       for (const t of traps) {
         if (t.mine === null) this.drawTrap(b, t);
-        else this.drawMineFrame(b, t);
+        else this.drawMine(b, t);
       }
-      this.drawMineMotion(mines);
+      this.drawMinePoses(traps);
       const mine = session.myCell();
       if (mine >= 0) {
         const me = session.players.find((p) => p.id === session.you);
@@ -232,90 +207,38 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     }
 
     /**
-     * Mine hors retournement (03-Pieges §2) : carré plein, avec un rebond quand le cadre l'atteint ;
-     * carré plein à 50 % pendant la recharge ; pointillés pour le poseur ; pointillés qui apparaissent en
-     * fondu pendant la révélation d'une mine adverse ; rien pendant que le cadre se resserre.
+     * Mine (03-Pieges §2), vue de la même façon par tous : cadre à pointes de la couleur du poseur, avec un
+     * rebond quand le grand cadre l'atteint ; à 35 % pendant la recharge ; rien tant que le grand cadre se
+     * resserre (drawMinePoses).
      */
-    drawMineFrame(b: Phaser.GameObjects.Graphics, t: ViewTrap): void {
+    drawMine(b: Phaser.GameObjects.Graphics, t: ViewTrap): void {
       const m = t.mine!;
-      if (m.flip !== null || m.shrink !== null) return;
-      const color = hexToInt(colorOf(t.owner).color);
+      if (m.shrink !== null) return;
       const [cx, cy] = cellCenter(t.cell);
-      if (m.face === "solid" || m.face === "resting") {
-        // Mine qui se recharge : visible par tous, à 50 % (03-Pieges §2).
-        const s = (MINE_SQUARE * (1 + 0.15 * m.pulse)) / 2;
-        b.lineStyle(2.5, color, m.face === "resting" ? 0.5 : 1);
-        b.strokeRoundedRect(cx - s, cy - s, 2 * s, 2 * s, 2);
-      } else if (m.face === "dashed" || (m.face === "given" && m.reveal > 0)) {
-        const s = MINE_SQUARE / 2;
-        b.lineStyle(2.5, color, m.face === "dashed" ? 1 : m.reveal);
-        dashedRect(b, cx - s, cy - s, 2 * s, 2 * s);
-      }
+      spikedFrame(b, cx, cy, hexToInt(colorOf(t.owner).color), m.resting ? RESTING_ALPHA : 1, 1 + 0.12 * m.pulse);
     }
 
-    /**
-     * Ce qui bouge : le cadre de la taille de la grille qui se resserre sur la case d'une mine qu'on vient
-     * de poser (this.overlay), et la case qui se retourne comme une carte, en se soulevant (this.cards).
-     * Le chiffre de la case retournée est son texte habituel, rétréci et recoloré pendant le retournement.
-     */
-    drawMineMotion(mines: ReadonlyMap<number, ViewTrap>): void {
+    /** Pose d'une mine : un cadre de la taille de la grille qui se resserre jusqu'au cadre de la mine. */
+    drawMinePoses(traps: readonly ViewTrap[]): void {
       const o = this.overlay;
-      const k = this.cards;
       o.clear();
-      k.clear();
-      const still = new Set(this.flipping);
-      for (const [cell, t] of mines) {
-        const m = t.mine!;
-        const c = colorOf(t.owner);
-        const color = hexToInt(c.color);
-        const [cx, cy] = cellCenter(cell);
-        if (m.shrink !== null) {
-          const p = easeInOut(Math.min(1, m.shrink));
-          const x0 = (cell % 9) * CELL_PX + 9;
-          const y0 = HUD_PX + Math.floor(cell / 9) * CELL_PX + 9;
-          const x = lerp(0, x0, p);
-          const y = lerp(HUD_PX, y0, p);
-          const size = lerp(BOARD_PX, 38, p);
-          const bw = lerp(6, 2.5, p);
-          const radius = lerp(10, 3, p);
-          o.fillStyle(color, 0.08 * (1 - p));
-          o.fillRoundedRect(x, y, size, size, radius);
-          o.lineStyle(bw + 2 * lerp(8, 0, p), color, 0.18);
-          o.strokeRoundedRect(x + bw / 2, y + bw / 2, size - bw, size - bw, radius);
-          o.lineStyle(bw, color, 1);
-          o.strokeRoundedRect(x + bw / 2, y + bw / 2, size - bw, size - bw, radius);
-        }
-        if (m.flip === null) continue;
-        const q = easeInOut(Math.min(1, m.flip));
-        const lift = Math.sin(Math.PI * q);
-        const sx = Math.max(0.02, Math.abs(Math.cos(Math.PI * q)));
-        const s = 1 + 0.14 * lift;
-        const front = q < 0.5;
-        const given = !front && m.back === "given";
-        const w = CELL_PX * s * sx;
-        const h = CELL_PX * s;
-        k.fillStyle(INK, 0.3 * lift);
-        k.fillRect(cx - w / 2, cy - h / 2 + 6 * lift, w, h);
-        k.fillStyle(given ? GIVEN_BG : hexToInt(c.tint), 1);
-        k.fillRect(cx - w / 2, cy - h / 2, w, h);
-        const fw = MINE_SQUARE * s * sx;
-        const fh = MINE_SQUARE * s;
-        k.lineStyle(2.5, color, 1);
-        if (front) k.strokeRect(cx - fw / 2, cy - fh / 2, fw, fh);
-        else if (!given) dashedRect(k, cx - fw / 2, cy - fh / 2, fw, fh);
-        const text = this.cellTexts[cell]!;
-        text.setScale(sx * s, s);
-        text.setColor(given ? toHex(INK) : c.ink);
-        text.setFontStyle(given ? "600" : "700");
-        this.cellCache[cell] = "";
-        this.flipping.add(cell);
-        still.delete(cell);
-      }
-      // Retournement fini (ou mine disparue) : le chiffre reprend sa taille.
-      for (const cell of still) {
-        this.cellTexts[cell]!.setScale(1);
-        this.cellCache[cell] = "";
-        this.flipping.delete(cell);
+      for (const t of traps) {
+        if (t.mine === null || t.mine.shrink === null) continue;
+        const color = hexToInt(colorOf(t.owner).color);
+        const p = easeInOut(Math.min(1, t.mine.shrink));
+        const x0 = (t.cell % 9) * CELL_PX + (CELL_PX - MINE_FRAME) / 2;
+        const y0 = HUD_PX + Math.floor(t.cell / 9) * CELL_PX + (CELL_PX - MINE_FRAME) / 2;
+        const x = lerp(0, x0, p);
+        const y = lerp(HUD_PX, y0, p);
+        const size = lerp(BOARD_PX, MINE_FRAME, p);
+        const bw = lerp(6, 2.5, p);
+        const radius = lerp(10, 3, p);
+        o.fillStyle(color, 0.08 * (1 - p));
+        o.fillRoundedRect(x, y, size, size, radius);
+        o.lineStyle(bw + 2 * lerp(8, 0, p), color, 0.18);
+        o.strokeRoundedRect(x + bw / 2, y + bw / 2, size - bw, size - bw, radius);
+        o.lineStyle(bw, color, 1);
+        o.strokeRoundedRect(x + bw / 2, y + bw / 2, size - bw, size - bw, radius);
       }
     }
 
@@ -342,7 +265,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       b.fillTriangle(mx + ax + bx, my + ay + by, mx - ax - bx, my - ay - by, mx - ax + bx, my - ay + by);
     }
 
-    /** Boules : en attente au centre de la tourelle avec un cercle qui se resserre, puis en vol. */
+    /** Boules : un cercle qui se resserre au centre de la tourelle la seconde avant le tir, puis la boule en vol. */
     drawBalls(balls: readonly ViewBall[]): void {
       const g = this.balls;
       g.clear();
@@ -352,8 +275,11 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         const x = px(ball.x);
         const y = HUD_PX + px(ball.y);
         if (ball.charging) {
+          // La seconde avant le tir : seul un cercle qui se resserre ; la boule cacherait le chiffre
+          // (03-Pieges §3).
           g.lineStyle(2, color, 0.25 + 0.6 * ball.progress);
           g.strokeCircle(x, y, r * (1 + 1.2 * (1 - ball.progress)) - 1);
+          continue;
         }
         g.fillStyle(INK, 0.25);
         g.fillCircle(x, y + 1.5, r);

@@ -8,11 +8,7 @@ import {
   BALL_CHARGE_TICKS,
   BALL_CONTACT,
   CELL,
-  MINE_CYCLE_TICKS,
-  MINE_FLIP_TICKS,
   MINE_REST_TICKS,
-  MINE_REVEAL_FROM,
-  MINE_SHOWN_TICKS,
   MINE_SHRINK_TICKS,
   ballAt,
   ballOut,
@@ -46,9 +42,7 @@ const KEPT_SNAPSHOTS = 40;
 const PENDING_MS = 3000;
 /** Après un tir, le canon dessiné reste dans la direction de la boule pendant ce nombre de ticks. */
 const CANNON_HOLD_TICKS = 6;
-/** Fondu d'une mine adverse qui se révèle ou se camoufle (0,15 s, provisoire, 03-Pieges §2). */
-const MINE_FADE_TICKS = 3;
-/** Rebond du carré de la mine quand le cadre l'atteint (0,18 s). */
+/** Rebond du cadre de la mine quand le grand cadre l'atteint (0,18 s). */
 const MINE_PULSE_TICKS = 3.6;
 
 export interface ViewPlayer {
@@ -72,21 +66,14 @@ export interface ClientTrap {
 }
 
 /**
- * Ce que montre une mine à cet instant (03-Pieges §2). `shrink` et `flip` : avancement, de 0 à 1, du cadre
- * qui se resserre et du retournement, `null` hors de ces phases. `face` : la case hors retournement —
- * `resting` (mine qui se recharge après une explosion : visible par tous, à moitié transparente),
- * `plain` (case du poseur, pendant le cadre), `solid` (mine pleine), `dashed` (mine en pointillés, celles
- * du joueur après le retournement), `given` (camouflée en chiffre donné). `reveal` : pour `given`, de 0 à
- * 1 pendant la révélation. `back` : la face qui apparaît au retournement. `pulse` : rebond du carré quand
- * le cadre l'atteint, de 1 à 0.
+ * Ce que montre une mine à cet instant (03-Pieges §2), pour tous les joueurs : `shrink`, avancement de 0 à
+ * 1 du grand cadre qui se resserre à la pose (`null` ensuite) ; `resting`, mine qui se recharge après une
+ * explosion (dessinée à 35 %) ; `pulse`, rebond du cadre à pointes quand le grand cadre l'atteint, de 1 à 0.
  */
 export interface MineLook {
   readonly shrink: number | null;
-  readonly flip: number | null;
+  readonly resting: boolean;
   readonly pulse: number;
-  readonly face: "resting" | "plain" | "solid" | "dashed" | "given";
-  readonly reveal: number;
-  readonly back: "dashed" | "given";
 }
 
 /** Un piège à dessiner ; (`ux`, `uy`) : direction du canon d'une tourelle, vecteur de longueur 1. */
@@ -310,9 +297,10 @@ export class PlaySession {
           this.digits[ev.cell] = ev.digit;
           this.owner[ev.cell] = ev.player;
           this.score.set(ev.player, (this.score.get(ev.player) ?? 0) + 1);
+          this.hp.set(ev.player, ev.hp);
           this.pending.delete(ev.cell);
           this.fx.push({ kind: "filled", cell: ev.cell, player: ev.player });
-          if (ev.player === this.you) this.#say(`${ev.digit} : accepté.`, now);
+          if (ev.player === this.you) this.#say(`${ev.digit} : accepté, PV au maximum.`, now);
           break;
         case "refused":
           this.hp.set(ev.player, ev.hp);
@@ -346,7 +334,7 @@ export class PlaySession {
           if (ev.player === this.you) {
             this.#placing.delete(ev.cell);
             this.#say(
-              ev.kind === "mine" ? "Mine posée : tout le monde la voit 2 s, puis elle se cache." : "Tourelle posée : première boule dans 1 s.",
+              ev.kind === "mine" ? "Mine posée : tout le monde la voit." : "Tourelle posée : premier tir dans 2 s, puis toutes les 6 s.",
               now,
             );
           }
@@ -363,7 +351,7 @@ export class PlaySession {
           if (trap !== undefined) this.traps.set(ev.cell, { ...trap, placed: tick + MINE_REST_TICKS });
           this.hp.set(ev.player, ev.hp);
           this.fx.push({ kind: "exploded", cell: ev.cell, player: ev.player });
-          if (ev.player === this.you) this.#say("Une mine : un PV de moins.", now);
+          if (ev.player === this.you) this.#say("Une mine : deux PV de moins.", now);
           else if (trap?.owner === this.you) this.#say("Votre mine a explosé : elle se recharge pendant 20 s.", now);
           break;
         }
@@ -546,29 +534,16 @@ export class PlaySession {
   }
 
   /**
-   * Phases d'une mine au tick `t` de l'hôte (celui où les pièges sont dessinés) : cadre qui se resserre,
-   * mine pleine visible par tous, retournement, puis pointillés pour le poseur et camouflage pour les
-   * autres, sauf pendant la révélation commune à toutes les mines (03-Pieges §2).
+   * Phase d'une mine au tick `t` de l'hôte (celui où les pièges sont dessinés), la même pour tous : grand
+   * cadre qui se resserre, puis mine posée ; recharge après une explosion (03-Pieges §2).
    */
   #mineLook(trap: ClientTrap, t: number): MineLook {
-    const own = trap.owner === this.you;
-    const back = own ? "dashed" : "given";
     // Pose plus loin dans le futur que l'avance possible de ce client : la mine se recharge après une
     // explosion. Ses derniers ticks de recharge ouvrent déjà le cadre, qui commence alors un peu tôt.
-    if (trap.placed - t > 5) return { shrink: null, flip: null, pulse: 0, face: "resting", reveal: 0, back };
+    if (trap.placed - t > 5) return { shrink: null, resting: true, pulse: 0 };
     const e = Math.max(0, t - trap.placed);
-    const shown = MINE_SHRINK_TICKS + MINE_SHOWN_TICKS;
-    if (e < MINE_SHRINK_TICKS) return { shrink: e / MINE_SHRINK_TICKS, flip: null, pulse: 0, face: "plain", reveal: 0, back };
-    if (e < shown) {
-      const pulse = Math.max(0, 1 - (e - MINE_SHRINK_TICKS) / MINE_PULSE_TICKS);
-      return { shrink: null, flip: null, pulse, face: "solid", reveal: 0, back };
-    }
-    if (e < shown + MINE_FLIP_TICKS) return { shrink: null, flip: (e - shown) / MINE_FLIP_TICKS, pulse: 0, face: "solid", reveal: 0, back };
-    if (own) return { shrink: null, flip: null, pulse: 0, face: "dashed", reveal: 1, back };
-    const c = ((t % MINE_CYCLE_TICKS) + MINE_CYCLE_TICKS) % MINE_CYCLE_TICKS;
-    const fadeIn = Math.min(1, Math.max(0, (c - MINE_REVEAL_FROM) / MINE_FADE_TICKS));
-    const fadeOut = Math.min(1, Math.max(0, (MINE_CYCLE_TICKS - c) / MINE_FADE_TICKS));
-    return { shrink: null, flip: null, pulse: 0, face: "given", reveal: fadeIn * fadeOut, back };
+    if (e < MINE_SHRINK_TICKS) return { shrink: e / MINE_SHRINK_TICKS, resting: false, pulse: 0 };
+    return { shrink: null, resting: false, pulse: Math.max(0, 1 - (e - MINE_SHRINK_TICKS) / MINE_PULSE_TICKS) };
   }
 
   #interpolated(id: number, renderTick: number): readonly [number, number] {

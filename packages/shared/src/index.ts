@@ -96,7 +96,7 @@ export function cloudflareGamePath(id: string): string {
 
 // ---- pièges (03-Pieges) ----
 
-/** `mine` : vue par tous à la pose, puis camouflée chez les autres ; `turret` : vue par tous, tire des boules. */
+/** `mine` et `turret` : vues par tous ; la tourelle tire des boules. */
 export const TRAP_KINDS = ["mine", "turret"] as const;
 export type TrapKind = (typeof TRAP_KINDS)[number];
 
@@ -179,7 +179,8 @@ export interface RankEntry {
 
 /** Ce qui s'est passé pendant un tick et ne se déduit pas des positions (01-Architecture §3). */
 export type GameEvent =
-  | { readonly type: "filled"; readonly cell: number; readonly digit: number; readonly player: number }
+  /** Chiffre juste : la case est à `player`, qui retrouve tous ses PV (`hp`). */
+  | { readonly type: "filled"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   /** Chiffre faux : refusé, `hp` est ce qui reste au joueur. */
   | { readonly type: "refused"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   /** Remplissage ignoré : case déjà remplie, ou bonhomme trop loin de la case pour l'hôte. Aucun PV perdu. */

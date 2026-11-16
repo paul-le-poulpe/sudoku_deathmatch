@@ -4,9 +4,9 @@ Ce qu'un joueur pose sur les cases qu'il a remplies pour gêner les autres.
 Fait foi pour ce domaine (`00-Game.md` renvoie ici). Qui détecte un contact,
 et ce qui passe par le réseau : `01-Architecture.md` §3, Pièges et projectiles.
 
-Implémenté le 15 novembre 2026, après la version 1, avec les dessins par
-défaut de la maquette : mine « carré », tourelle « anneau ». Réglages :
-`packages/engine/src/config.ts`.
+Implémenté le 15 novembre 2026, après la version 1 ; revu le 16 novembre 2026
+(mine « cadre à pointes » toujours visible, tourelle « anneau » toutes les
+6 s). Réglages : `packages/engine/src/config.ts`.
 
 Maquette (15 novembre 2026) : artifact « Sudoku Deathmatch — pièges » (démo
 jouable, trois dessins de mine, trois dessins de tourelle). Seules les règles
@@ -44,75 +44,53 @@ Provisoire :
 
 ## 2. La mine
 
-Décidé par l'auteur le 15 novembre 2026, pose revue le 16 novembre 2026 :
+Décidé par l'auteur le 16 novembre 2026 (les règles remplacées sont dans
+`03-Pieges-History.md`, qui ne fait pas foi) :
 
-- **Dessin** : un carré inscrit dans le carré de la case, autour du chiffre.
-- **La pose se voit, par tous** : un grand cadre de la taille de la grille se
-  resserre jusqu'au carré de la mine, sur la case.
-- **La mine reste ensuite visible pour tous pendant 2 s.** Pendant ces 2 s,
-  elle ne peut pas exploser.
-- **Puis la case se retourne**, comme une carte : d'un côté la mine, de
-  l'autre la case normale. Après le retournement, les autres joueurs voient la
-  case comme un chiffre donné au départ (fond gris, chiffre noir),
-  indiscernable des chiffres donnés ; le poseur, lui, voit sa mine en
-  pointillés, sur sa case de sa couleur (décidé le 16 novembre 2026).
-- **Révélation toutes les 10 s** (décidé le 16 novembre 2026) : pendant 1,5 s
-  sur 10, chaque joueur voit toutes les mines adverses avec la même apparence
-  que ses propres mines (case de la couleur du poseur, carré en pointillés de
-  sa couleur) ; les 8,5 autres secondes, elles sont camouflées en chiffres
-  donnés.
-  Un seul cycle pour toutes les mines de la partie, quel que soit le moment de
-  leur pose.
+- **Toujours visible**, par tous les joueurs.
+- **Dessin** : le « cadre à pointes » de la maquette (planche « Mine toujours
+  visible ») : un cadre carré qui prend toute la case, autour du chiffre,
+  hérissé de pointes vers l'extérieur, dans la couleur du poseur. Il doit se
+  voir de loin ; le chiffre reste au centre et lisible.
+- **Fond de la case** : le fond clair du poseur, comme toute case qu'il a
+  remplie.
+- **Pose** : un grand cadre de la taille de la grille se resserre jusqu'au
+  cadre de la mine, sur la case. Ensuite la mine est posée, sans autre
+  animation : pas de retournement, pas de camouflage.
 - **Un adversaire qui marche dessus** déclenche une petite explosion et perd
-  1 PV.
-- **Recharge** (décidé le 16 novembre 2026) : une mine qui explose reste sur
-  sa case et devient inactive pendant 20 s. Elle est visible pour tous, à
-  moitié transparente (50 %), et ne blesse personne. Après ces 20 s, sa pose
-  se rejoue : le cadre se resserre, la mine reste 2 s visible, puis la case se
-  retourne.
+  2 PV.
+- **Recharge** : une mine qui explose reste sur sa case et devient inactive
+  pendant 20 s. Elle est visible pour tous, plus transparente (cadre à 35 %, essai du 16 novembre 2026 ; 50 % avant), et ne
+  blesse personne. Après ces 20 s, sa pose se rejoue : le cadre se resserre.
 
 Implémenté le 16 novembre 2026 (réseau : `01-Architecture.md` §3, Mines).
-Maquettes : planches « Mine : pose visible, puis retournement » et « Mines :
-révélation 1,5 s toutes les 10 s » de l'artifact « Sudoku Deathmatch —
-pièges ».
+Maquette : planche « Nouvelles mines et tourelles » de l'artifact « Sudoku
+Deathmatch — pièges ».
 
 Provisoire :
-- Durées : cadre qui se resserre 0,6 s, retournement 0,45 s.
-- La mine peut exploser à partir de la fin du retournement (aussi après une
-  recharge).
-- La case retournée compte toujours dans les cases du poseur (classement,
-  panneau des joueurs).
-- Pendant la recharge, la case a la couleur du poseur pour tous, et seul le
-  carré plein est à 50 % ; la révélation ne change rien à une mine en
-  recharge.
-- Le retournement se voit aussi chez le poseur : sa case passe de la mine
-  pleine à la mine en pointillés.
-- Cycle de révélation : il part du lancement de la partie ; les mines sont
-  visibles de 8,5 s à 10 s de chaque période de 10 s (ticks 170 à 199 modulo
-  200), au tick de l'hôte où le client dessine les pièges.
-- Passage du camouflage à la mine et retour : fondu de 0,15 s, sans
-  retournement.
-- Une mine reste active pendant sa révélation.
-- Une mine encore dans ses 2 s visibles après la pose garde son carré plein
-  pendant une révélation.
+- Le cadre qui se resserre dure 0,6 s ; la mine peut exploser dès qu'il a
+  atteint la case (aussi après une recharge).
+- Pendant la recharge, le cadre à pointes est à 35 % d'opacité.
+- La case minée compte toujours dans les cases du poseur (classement, panneau
+  des joueurs).
 - La mine explose quand le centre d'un bonhomme adverse entre dans la case.
-- Pointillés : traits de 5 px, espaces de 3,5 px.
-- Dessin : le carré de la maquette (implémenté), parmi trois (carré, losange,
-  coins). Le carré se confond avec le cadre qui marque la case de son propre
-  bonhomme (même couleur, 2 px du bord), le losange et les coins non.
+- Le cadre à pointes peut se confondre avec le cadre épais qui marque la case
+  de son propre bonhomme (même couleur, 2 px du bord).
 
 ## 3. La tourelle
 
 Décidé par l'auteur le 15 novembre 2026 :
 
 - **Dessin** : un rond inscrit dans le carré de la case, et un petit carré sur
-  le rond, qui sert de canon.
+  le rond, qui sert de canon. Fond de la case : le fond clair du poseur, comme
+  pour la mine (décidé le 16 novembre 2026).
 - **Tir** : à intervalles réguliers, elle tire une boule en ligne droite vers
   le joueur le plus proche.
 - **La boule va lentement** : un joueur doit pouvoir l'éviter facilement.
-- **Avertissement** : environ une seconde avant le tir, la boule apparaît au
-  centre de la tourelle, par-dessus le chiffre ; une seconde après son
-  apparition, elle part.
+- **Cadence** : un tir toutes les 6 s (décidé le 16 novembre 2026).
+- **Avertissement** : environ une seconde avant le tir, un cercle se resserre
+  au centre de la tourelle. La boule n'est pas dessinée avant de partir : elle
+  cacherait le chiffre (décidé le 16 novembre 2026).
 - **La direction est fixée au départ de la boule**, vers la cible à cet
   instant ; jusque-là, le canon suit la cible. Conséquence : sur chaque écran,
   la boule apparaît déjà un peu avancée sur sa trajectoire, d'environ sa
@@ -122,8 +100,8 @@ Décidé par l'auteur le 15 novembre 2026 :
 Provisoire :
 - La cible est le bonhomme adverse non éliminé le plus proche du centre de la
   tourelle.
-- Boule : 1,5 case par seconde (le bonhomme : 3), diamètre 0,3 case ; une
-  boule toutes les 3 s, la première 1 s après la pose.
+- Boule : 1,5 case par seconde (le bonhomme : 3), diamètre 0,3 case ; le
+  cercle de la première apparaît 1 s après la pose, elle part 1 s plus tard.
 - Une boule qui touche un bonhomme adverse lui enlève 1 PV et disparaît. Elle
   disparaît aussi au bord de la grille ; elle passe par-dessus les cases et
   les autres pièges.
@@ -138,9 +116,9 @@ Provisoire :
   nombre par joueur, délai entre deux poses).
 - **Délai d'avertissement** pour un futur piège visible : il doit être plus
   long que le ping des joueurs, sinon un joueur peut être touché par un piège
-  que son écran ne montre pas encore. Pour la tourelle, la seconde
-  d'apparition de la boule annonce le tir, mais pas sa direction (§3).
+  que son écran ne montre pas encore. Pour la tourelle, la seconde du cercle
+  annonce le tir, mais pas sa direction (§3).
 - **Une boule qui disparaît en touchant** : chaque client apprend en retard
   qu'un autre bonhomme l'a prise. Deux joueurs peuvent donc chacun la voir
   toucher leur propre bonhomme, et perdre chacun 1 PV.
-- **Dessins** de la mine et de la tourelle (§2, §3).
+- **Dessin de la tourelle** (§3).

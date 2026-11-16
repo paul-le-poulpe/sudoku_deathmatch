@@ -19,8 +19,8 @@ export const BODY_MARGIN = 150;
  */
 export const FILL_TOLERANCE = 200;
 
-/** Points de vie au départ (00-Game §1). */
-export const START_HP = 3;
+/** Points de vie au départ, et après chaque chiffre juste (00-Game §1). */
+export const START_HP = 4;
 
 // ---- pièges (03-Pieges, valeurs provisoires) ----
 
@@ -31,29 +31,26 @@ export const BALL_SPEED = 75;
 export const BALL_RADIUS = 150;
 /** Distance entre les centres d'une boule et d'un bonhomme en dessous de laquelle ils se touchent. */
 export const BALL_CONTACT = BALL_RADIUS + BODY_RADIUS;
-/** Tourelle : première boule 1 s après la pose, puis une toutes les 3 s ; chacune visible 1 s avant de partir. */
+/**
+ * Tourelle : le cercle de la première boule 1 s après la pose (provisoire), puis un tir toutes les 6 s
+ * (décidé) ; le cercle se resserre 1 s avant chaque tir, la boule n'est pas dessinée avant de partir.
+ */
 export const TURRET_FIRST_TICKS = 20;
-export const TURRET_INTERVAL_TICKS = 60;
+export const TURRET_INTERVAL_TICKS = 120;
 export const BALL_CHARGE_TICKS = 20;
 /**
- * Mine (03-Pieges §2), en ticks depuis la pose : le cadre se resserre (0,6 s), la mine reste visible pour
- * tous (2 s, décidé), la case se retourne (0,45 s). Elle ne peut exploser qu'à la fin du retournement.
+ * Mine (03-Pieges §2), toujours visible : à la pose, le cadre se resserre (0,6 s, provisoire) ; elle peut
+ * exploser dès qu'il a atteint la case (provisoire).
  */
 export const MINE_SHRINK_TICKS = 12;
-export const MINE_SHOWN_TICKS = 40;
-export const MINE_FLIP_TICKS = 9;
-export const MINE_ARM_TICKS = MINE_SHRINK_TICKS + MINE_SHOWN_TICKS + MINE_FLIP_TICKS;
+export const MINE_ARM_TICKS = MINE_SHRINK_TICKS;
+/** PV qu'enlève une mine (décidé). Chiffre faux et boule : 1. */
+export const MINE_DAMAGE = 2;
 /**
- * Une mine qui explose se recharge pendant 20 s (décidé) : visible à moitié transparente pour tous,
- * inoffensive, puis sa pose se rejoue (cadre, 2 s visible, retournement).
+ * Une mine qui explose se recharge pendant 20 s (décidé) : visible, plus transparente, pour tous,
+ * inoffensive, puis sa pose se rejoue (le cadre se resserre).
  */
 export const MINE_REST_TICKS = 400;
-/**
- * Révélation des mines adverses (03-Pieges §2, décidé : 1,5 s toutes les 10 s, un seul cycle pour toute la
- * partie) : visibles quand le tick, modulo MINE_CYCLE_TICKS, est au moins MINE_REVEAL_FROM.
- */
-export const MINE_CYCLE_TICKS = 200;
-export const MINE_REVEAL_FROM = 170;
 
 /**
  * Contrôle de l'hôte (01-Architecture §3, Pièges et projectiles) : il compte lui-même un contact quand les
