@@ -181,7 +181,7 @@ export interface RankEntry {
 export type GameEvent =
   /** Chiffre juste : la case est à `player`, qui retrouve tous ses PV (`hp`). */
   | { readonly type: "filled"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
-  /** Chiffre faux : refusé, `hp` est ce qui reste au joueur. */
+  /** Chiffre faux : refusé, `hp` est ce qui reste au joueur (1, ou 0 s'il n'en avait plus qu'un). */
   | { readonly type: "refused"; readonly cell: number; readonly digit: number; readonly player: number; readonly hp: number }
   /** Remplissage ignoré : case déjà remplie, ou bonhomme trop loin de la case pour l'hôte. Aucun PV perdu. */
   | { readonly type: "ignored"; readonly cell: number; readonly player: number }

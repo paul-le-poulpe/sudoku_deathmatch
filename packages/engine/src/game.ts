@@ -214,7 +214,9 @@ function applyFill(game: Game, fill: FillRequest, events: EngineEvent[]): void {
     events.push({ type: "filled", cell: fill.cell, digit: fill.digit, player: p.id, hp: p.hp });
     return;
   }
-  damage(game, p, events, (hp) => ({ type: "refused", cell: fill.cell, digit: fill.digit, player: p.id, hp }));
+  // Chiffre faux (00-Game §1) : il ne reste qu'un PV ; s'il n'en restait qu'un, il est perdu.
+  const loss = p.hp > 1 ? p.hp - 1 : 1;
+  damage(game, p, events, (hp) => ({ type: "refused", cell: fill.cell, digit: fill.digit, player: p.id, hp }), loss);
 }
 
 /** Pose : case remplie par ce joueur, sans piège, bonhomme dessus (même tolérance qu'un remplissage). */

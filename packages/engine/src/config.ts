@@ -44,7 +44,7 @@ export const BALL_CHARGE_TICKS = 20;
  */
 export const MINE_SHRINK_TICKS = 12;
 export const MINE_ARM_TICKS = MINE_SHRINK_TICKS;
-/** PV qu'enlève une mine (décidé). Chiffre faux et boule : 1. */
+/** PV qu'enlève une mine (décidé). Boule : 1 ; chiffre faux : tous sauf un, ou le dernier (00-Game §1). */
 export const MINE_DAMAGE = 2;
 /**
  * Une mine qui explose se recharge pendant 20 s (décidé) : visible, plus transparente, pour tous,

@@ -29,7 +29,9 @@ Décidé par l'auteur le 15 novembre 2026.
   écrire un chiffre.
   - Chiffre juste : la case prend la couleur du joueur, et il retrouve tous
     ses PV (décidé le 16 novembre 2026).
-  - Chiffre faux : il est refusé, la case reste vide, et le joueur perd 1 PV.
+  - Chiffre faux : il est refusé, la case reste vide, et le joueur perd tous
+    ses PV sauf un ; s'il ne lui en restait qu'un, il le perd et il est
+    éliminé (décidé le 16 novembre 2026 ; avant : 1 PV).
 - **Pas de coups.** Les bonshommes ne peuvent pas se frapper.
 - **Pièges** (ajoutés après la version 1). Une case remplie octroie au joueur des
   bonus, ou des malus pour ses adversaires : après avoir rempli une case
@@ -80,7 +82,7 @@ elles pourront changer ensuite.
   d'un joueur plus tard (`01-Architecture.md` §1).
 - **Écrire un chiffre** : touches 1 à 9, ou boutons à l'écran, dans la case où
   se trouve le bonhomme.
-- **Chiffre faux** : refusé, 1 PV perdu (§1). Pas d'autre pénalité.
+- **Chiffre faux** : refusé, PV perdus (§1). Pas d'autre pénalité.
 - **Traversées** : les cases des chiffres donnés se traversent, les bonshommes
   se traversent.
 - **Élimination** (provisoire) : le bonhomme éliminé disparaît de la grille et

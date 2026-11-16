@@ -308,7 +308,7 @@ export class PlaySession {
           if (ev.player === this.you) {
             this.pending.delete(ev.cell);
             this.flash.set(ev.cell, now + 600);
-            this.#say(`${ev.digit} refusé : un PV de moins.`, now);
+            this.#say(ev.hp > 0 ? `${ev.digit} refusé : il ne vous reste qu'un PV.` : `${ev.digit} refusé : plus aucun PV.`, now);
           }
           break;
         case "ignored":

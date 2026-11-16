@@ -132,7 +132,7 @@ Décidé par l'auteur le 15 novembre 2026.
   L'hôte vérifie que le bonhomme est sur cette case (avec une tolérance près
   des bords, provisoire, pour un client dont la position prédite est
   légèrement en avance), que la case est vide, puis compare le chiffre à la
-  solution. Chiffre faux : refusé, 1 PV en moins (`00-Game.md` §1).
+  solution. Chiffre faux : refusé, PV perdus (`00-Game.md` §1).
 - `place {cell, kind}` : poser une mine ou une tourelle sur la case `cell`.
   L'hôte vérifie, avec la tolérance de `fill`, que le bonhomme est sur la case,
   qu'elle a été remplie par ce joueur et qu'elle n'a pas de piège.
