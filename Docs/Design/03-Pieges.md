@@ -8,7 +8,8 @@ Implémenté le 15 novembre 2026, après la version 1 ; revu le 16 novembre 2026
 (mine « cadre à pointes » toujours visible, tourelle « anneau » toutes les
 6 s). Réglages : `packages/engine/src/config.ts`.
 
-Maquette (15 novembre 2026) : artifact « Sudoku Deathmatch — pièges » (démo
+Maquette (15 novembre 2026) : artifact « Sudoku Deathmatch — pièges »,
+https://claude.ai/artifact/S7N3PdpvxYNjbKvih3pT2K (démo
 jouable, trois dessins de mine, trois dessins de tourelle). Seules les règles
 de ce document font foi.
 

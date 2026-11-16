@@ -103,6 +103,25 @@ wrangler n'est pas installé globalement : toujours `npx wrangler`.
 
 ---
 
+## Façon de travailler avec l'auteur
+
+- **Commit et push seulement quand l'auteur le demande**, directement sur
+  `main` (pas de branche ni de PR). Le push déploie (règle 7).
+- **Après un push**, vérifier le déploiement : l'exécution de la GitHub Action
+  pour le commit, par
+  `https://api.github.com/repos/paul-le-poulpe/sudoku_deathmatch/actions/runs?head_sha=<SHA complet>`
+  (un SHA abrégé ne renvoie rien), jusqu'à `"status": "completed"` et
+  `"conclusion": "success"`. Le jeu en ligne :
+  https://sudoku-deathmatch.paul-raynaud.workers.dev.
+- **Visuel d'abord** : pour un changement d'aspect (dessin, écran, fenêtre),
+  l'auteur demande souvent une maquette avant l'implémentation. Les
+  maquettes sont des artifacts (type Design), listés dans les documents qui
+  les citent ; seules les règles écrites dans `Docs/Design/` font foi.
+- **Noms dans les maquettes** : ceux que l'auteur donne (Paul, Maxime,
+  Philémon, Maiko, Meimei…), pas des noms inventés.
+
+---
+
 ## Règles
 
 ### 1. Rien n'est copié d'un autre jeu

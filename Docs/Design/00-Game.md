@@ -80,9 +80,13 @@ Décidé par l'auteur le 15 novembre 2026.
     connectés ; un joueur déconnecté à ce moment quitte la partie.
 - **Couleurs des joueurs** : palette « Classique » (bleu, rouge, vert, jaune,
   violet, charbon), choisie par l'auteur le 15 novembre 2026 dans la maquette
-  « Sudoku Deathmatch — couleurs ». Valeurs : `client/src/colors.ts`.
+  « Sudoku Deathmatch — couleurs »
+  (https://claude.ai/artifact/Dg6n4JoXYZULWhgUf1D61n). Valeurs :
+  `client/src/colors.ts`. Une case remplie par un joueur a le fond clair de
+  sa couleur et un chiffre noir (essai demandé par l'auteur le 16 novembre
+  2026 ; avant : chiffre dans la couleur du joueur).
 - **Tutoriel** (décidé le 16 novembre 2026, maquette « Sudoku Deathmatch —
-  tutoriel ») : sur l'accueil, un bouton sous le solo ouvre une fenêtre
+  tutoriel », https://claude.ai/artifact/J8HJtARyKi5uGQLh3Xnf1r) : sur l'accueil, un bouton sous le solo ouvre une fenêtre
   par-dessus la page, sur un fond assombri. Cinq étapes, peu de texte, surtout
   des images : remplir une case, chiffre faux, poser un piège, la mine, la
   tourelle. « Jouer », à la dernière étape, ferme la fenêtre ; la croix, un clic
