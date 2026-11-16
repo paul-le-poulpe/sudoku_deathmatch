@@ -542,7 +542,9 @@ p {
   text-align: left;
 }
 
-.trap-key {
+/* Dessin d'une touche : sur les boutons des pièges, et dans l'encadré des commandes. */
+.trap-key,
+.keycap {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -615,6 +617,68 @@ p {
 
 .game-side .card {
   padding: 20px;
+}
+
+/* Encadré des commandes : une ligne par action, ses touches à droite. */
+.controls {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.control dt {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.control dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keycap {
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.controls-or {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Quatre touches en T renversé, dans l'ordre haut, gauche, bas, droite. */
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  grid-auto-rows: 22px;
+  gap: 3px;
+}
+
+.keypad > :nth-child(1) {
+  grid-area: 1 / 2;
+}
+
+.keypad > :nth-child(2) {
+  grid-area: 2 / 1;
+}
+
+.keypad > :nth-child(3) {
+  grid-area: 2 / 2;
+}
+
+.keypad > :nth-child(4) {
+  grid-area: 2 / 3;
 }
 
 .scores {
