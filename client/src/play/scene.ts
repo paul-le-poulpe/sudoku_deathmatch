@@ -8,17 +8,29 @@
 // avec un canon carré, et un cercle qui se resserre la seconde avant le tir (planche « Nouvelles mines et
 // tourelles »).
 
-import { BALL_RADIUS, GRID } from "@sudoku-deathmatch/engine";
+import { BALL_RADIUS, CATCH_UP_HP, GRID, START_HP } from "@sudoku-deathmatch/engine";
 
 import { PLAYER_COLORS, hexToInt, playerColor, type PlayerColor } from "../colors.ts";
 import type { PlaySession, ViewBall, ViewTrap } from "./session.ts";
 
 export const CELL_PX = 56;
 export const BOARD_PX = 9 * CELL_PX;
-/** Bandeau des PV, au-dessus de la grille (00-Game §1). */
-export const HUD_PX = 64;
 export const VIEW_W = BOARD_PX;
-export const VIEW_H = HUD_PX + BOARD_PX;
+/**
+ * Bandeau des PV, au-dessus de la grille (00-Game §1) : deux joueurs par ligne, donc une ligne jusqu'à 2
+ * joueurs et deux à 3 ou 4. Une ligne : 58 px (case de 50 px, 8 px d'écart), plus 6 px en haut.
+ */
+const HUD_COLS = 2;
+const HUD_ROW = 58;
+
+export function hudHeight(players: number): number {
+  return 6 + HUD_ROW * Math.max(1, Math.ceil(players / HUD_COLS));
+}
+
+/** Hauteur de la vue : bandeau et grille. `screen.ts` en donne la même au conteneur avant que Phaser charge. */
+export function viewHeight(players: number): number {
+  return hudHeight(players) + BOARD_PX;
+}
 
 const INK = 0x1c1917;
 const LINE = 0xd6d3d1;
@@ -26,16 +38,14 @@ const GIVEN_BG = 0xf5f5f4;
 const EMPTY_BG = 0xffffff;
 const FLASH_BG = 0xfecaca;
 const PENDING_BG = 0xfef3c7;
+/** Contour d'une pastille de PV perdu. */
+const EMPTY_PIP = 0xa8a29e;
 const REFUSED = "#DC2626";
 const BLAST = "#F59E0B";
 
 /** Unités du moteur → pixels de la grille. */
 function px(u: number): number {
   return (u / GRID) * BOARD_PX;
-}
-
-function cellCenter(cell: number): [number, number] {
-  return [(cell % 9) * CELL_PX + CELL_PX / 2, HUD_PX + Math.floor(cell / 9) * CELL_PX + CELL_PX / 2];
 }
 
 /** Cadre de la mine : carré de 32 px au centre de la case (12 px du bord), trait de 2,5 px vers l'intérieur. */
@@ -50,6 +60,33 @@ function lerp(a: number, b: number, t: number): number {
 function easeInOut(x: number): number {
   return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 }
+
+/** De 0 à 1 en dépassant 1 d'environ 10 % avant d'y revenir. */
+function easeOutBack(x: number): number {
+  return 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
+}
+
+/** De 0 à 1 en passant d'abord un peu sous 0. */
+function easeInBack(x: number): number {
+  return 2.70158 * x ** 3 - 1.70158 * x ** 2;
+}
+
+function clamp01(x: number): number {
+  return Math.max(0, Math.min(1, x));
+}
+
+type ViewPlayer = ReturnType<PlaySession["view"]>[number];
+
+/**
+ * PV du retard (00-Game §1, maquette « PV de rattrapage », A) : losanges qui grossissent en 260 ms à
+ * l'arrivée, rapetissent en 220 ms au départ ; « rattrapage » apparaît en 300 ms après 150 ms, disparaît
+ * en 150 ms.
+ */
+const BONUS_IN_MS = 260;
+const BONUS_OUT_MS = 220;
+const LABEL_DELAY_MS = 150;
+const LABEL_IN_MS = 300;
+const LABEL_OUT_MS = 150;
 
 /**
  * Cadre à pointes centré en (cx, cy), agrandi de `k` : le carré, et deux pointes de 8 px de large sur 5 de
@@ -80,6 +117,12 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
   await document.fonts.ready;
 
   const colorOf = (player: number): PlayerColor => playerColor(session.players.find((p) => p.id === player)?.color ?? 0);
+  /** Haut de la grille : sous le bandeau des PV, d'une ou deux lignes. Les joueurs ne changent pas en partie. */
+  const TOP = hudHeight(session.players.length);
+  const cellCenter = (cell: number): [number, number] => [
+    (cell % 9) * CELL_PX + CELL_PX / 2,
+    TOP + Math.floor(cell / 9) * CELL_PX + CELL_PX / 2,
+  ];
 
   class BoardScene extends P.Scene {
     board!: Phaser.GameObjects.Graphics;
@@ -91,6 +134,9 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     readonly cellTexts: Phaser.GameObjects.Text[] = [];
     readonly cellCache: string[] = [];
     readonly nameTexts = new Map<number, Phaser.GameObjects.Text>();
+    readonly bonusTexts = new Map<number, Phaser.GameObjects.Text>();
+    /** Par joueur : losanges affichés ou non, depuis quand, et ses PV au dernier dessin affiché. */
+    readonly bonus = new Map<number, { shown: boolean; since: number; hp: number }>();
     readonly sprites = new Map<number, Phaser.GameObjects.Image>();
     readonly emitters = new Map<string, Phaser.GameObjects.Particles.ParticleEmitter>();
 
@@ -138,7 +184,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       const hazards = session.hazards(now, view);
       this.drawBoard(now, hazards.traps);
       this.drawBalls(hazards.balls);
-      this.drawHud(view);
+      this.drawHud(now, view);
       this.drawPlayers(view);
       this.playFx();
     }
@@ -171,7 +217,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
           } else session.flash.delete(i);
         }
         b.fillStyle(bg, 1);
-        b.fillRect((i % 9) * CELL_PX, HUD_PX + Math.floor(i / 9) * CELL_PX, CELL_PX, CELL_PX);
+        b.fillRect((i % 9) * CELL_PX, TOP + Math.floor(i / 9) * CELL_PX, CELL_PX, CELL_PX);
         const key = `${text}|${ink}|${weight}`;
         if (this.cellCache[i] !== key) {
           this.cellCache[i] = key;
@@ -184,15 +230,15 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       b.lineStyle(1, LINE, 1);
       for (let k = 1; k < 9; k++) {
         if (k % 3 === 0) continue;
-        b.lineBetween(k * CELL_PX, HUD_PX, k * CELL_PX, HUD_PX + BOARD_PX);
-        b.lineBetween(0, HUD_PX + k * CELL_PX, BOARD_PX, HUD_PX + k * CELL_PX);
+        b.lineBetween(k * CELL_PX, TOP, k * CELL_PX, TOP + BOARD_PX);
+        b.lineBetween(0, TOP + k * CELL_PX, BOARD_PX, TOP + k * CELL_PX);
       }
       b.lineStyle(3, INK, 1);
       for (const k of [3, 6]) {
-        b.lineBetween(k * CELL_PX, HUD_PX, k * CELL_PX, HUD_PX + BOARD_PX);
-        b.lineBetween(0, HUD_PX + k * CELL_PX, BOARD_PX, HUD_PX + k * CELL_PX);
+        b.lineBetween(k * CELL_PX, TOP, k * CELL_PX, TOP + BOARD_PX);
+        b.lineBetween(0, TOP + k * CELL_PX, BOARD_PX, TOP + k * CELL_PX);
       }
-      b.strokeRect(1.5, HUD_PX + 1.5, BOARD_PX - 3, BOARD_PX - 3);
+      b.strokeRect(1.5, TOP + 1.5, BOARD_PX - 3, BOARD_PX - 3);
       for (const t of traps) {
         if (t.mine === null) this.drawTrap(b, t);
         else this.drawMine(b, t);
@@ -202,7 +248,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       if (mine >= 0) {
         const me = session.players.find((p) => p.id === session.you);
         b.lineStyle(3, hexToInt(playerColor(me?.color ?? 0).color), 1);
-        b.strokeRect((mine % 9) * CELL_PX + 3.5, HUD_PX + Math.floor(mine / 9) * CELL_PX + 3.5, CELL_PX - 7, CELL_PX - 7);
+        b.strokeRect((mine % 9) * CELL_PX + 3.5, TOP + Math.floor(mine / 9) * CELL_PX + 3.5, CELL_PX - 7, CELL_PX - 7);
       }
     }
 
@@ -227,9 +273,9 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         const color = hexToInt(colorOf(t.owner).color);
         const p = easeInOut(Math.min(1, t.mine.shrink));
         const x0 = (t.cell % 9) * CELL_PX + (CELL_PX - MINE_FRAME) / 2;
-        const y0 = HUD_PX + Math.floor(t.cell / 9) * CELL_PX + (CELL_PX - MINE_FRAME) / 2;
+        const y0 = TOP + Math.floor(t.cell / 9) * CELL_PX + (CELL_PX - MINE_FRAME) / 2;
         const x = lerp(0, x0, p);
-        const y = lerp(HUD_PX, y0, p);
+        const y = lerp(TOP, y0, p);
         const size = lerp(BOARD_PX, MINE_FRAME, p);
         const bw = lerp(6, 2.5, p);
         const radius = lerp(10, 3, p);
@@ -249,7 +295,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     drawTrap(b: Phaser.GameObjects.Graphics, t: ViewTrap): void {
       const color = hexToInt(colorOf(t.owner).color);
       const x0 = (t.cell % 9) * CELL_PX;
-      const y0 = HUD_PX + Math.floor(t.cell / 9) * CELL_PX;
+      const y0 = TOP + Math.floor(t.cell / 9) * CELL_PX;
       const cx = x0 + CELL_PX / 2;
       const cy = y0 + CELL_PX / 2;
       b.lineStyle(2.5, color, 1);
@@ -273,7 +319,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       for (const ball of balls) {
         const color = hexToInt(colorOf(ball.owner).color);
         const x = px(ball.x);
-        const y = HUD_PX + px(ball.y);
+        const y = TOP + px(ball.y);
         if (ball.charging) {
           // La seconde avant le tir : seul un cercle qui se resserre ; la boule cacherait le chiffre
           // (03-Pieges §3).
@@ -290,39 +336,98 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       }
     }
 
-    drawHud(view: ReturnType<PlaySession["view"]>): void {
+    /**
+     * Taille des losanges du retard (0 à 1, un peu plus pendant le rebond), opacité de « rattrapage », et
+     * PV à montrer dans les losanges : pendant qu'ils rapetissent, ceux d'avant le retour à 4 (l'événement
+     * `hp_max` a déjà retiré les PV au-dessus de 4).
+     */
+    bonusLook(now: number, p: ViewPlayer): { scale: number; label: number; hp: number } {
+      const shown = p.hpMax > START_HP;
+      let b = this.bonus.get(p.id);
+      if (b === undefined) {
+        // Premier dessin (début de partie, reconnexion) : pas d'animation.
+        b = { shown, since: -Infinity, hp: p.hp };
+        this.bonus.set(p.id, b);
+      } else if (b.shown !== shown) {
+        b.shown = shown;
+        b.since = now;
+      }
+      if (shown) b.hp = p.hp;
+      const t = now - b.since;
+      if (shown) {
+        return {
+          scale: easeOutBack(Math.min(1, t / BONUS_IN_MS)),
+          label: clamp01((t - LABEL_DELAY_MS) / LABEL_IN_MS),
+          hp: b.hp,
+        };
+      }
+      return { scale: 1 - easeInBack(Math.min(1, t / BONUS_OUT_MS)), label: 1 - clamp01(t / LABEL_OUT_MS), hp: b.hp };
+    }
+
+    drawHud(now: number, view: readonly ViewPlayer[]): void {
       const h = this.hud;
       h.clear();
-      const slot = VIEW_W / Math.max(1, view.length);
+      // Deux cases par ligne, dans l'ordre de la salle : les joueurs 3 et 4 sont sur la seconde.
+      const slot = VIEW_W / Math.max(1, Math.min(HUD_COLS, view.length));
       view.forEach((p, k) => {
         const c = playerColor(p.color);
-        const x0 = k * slot;
+        const x0 = (k % HUD_COLS) * slot;
+        const y0 = Math.floor(k / HUD_COLS) * HUD_ROW;
         const alpha = p.alive ? 1 : 0.45;
         h.fillStyle(p.you ? hexToInt(c.tint) : 0xffffff, alpha);
-        h.fillRoundedRect(x0 + 4, 6, slot - 8, HUD_PX - 14, 10);
+        h.fillRoundedRect(x0 + 4, y0 + 6, slot - 8, HUD_ROW - 8, 10);
         h.lineStyle(p.you ? 2 : 1, p.you ? hexToInt(c.color) : LINE, alpha);
-        h.strokeRoundedRect(x0 + 4, 6, slot - 8, HUD_PX - 14, 10);
-        // Pastilles des PV, une par PV max (4, ou 6 en retard) : resserrées si elles débordent de la case.
-        const pitch = Math.min(22, (slot - 44) / Math.max(1, p.hpMax - 1));
-        const r = Math.min(7, (pitch - 4) / 2);
-        for (let k2 = 0; k2 < p.hpMax; k2++) {
-          const cx = x0 + 22 + k2 * pitch;
+        h.strokeRoundedRect(x0 + 4, y0 + 6, slot - 8, HUD_ROW - 8, 10);
+        // Pastilles des PV (00-Game §1) : 4 ronds ; en retard, 2 losanges 8 px plus loin, puis « rattrapage ».
+        // Pleines de gauche à droite : un joueur en retard perd d'abord les losanges.
+        const color = hexToInt(c.color);
+        const cy = y0 + 41;
+        for (let k2 = 0; k2 < START_HP; k2++) {
+          const cx = x0 + 22 + k2 * 22;
           if (k2 < p.hp) {
-            h.fillStyle(hexToInt(c.color), alpha);
-            h.fillCircle(cx, 41, r);
+            h.fillStyle(color, alpha);
+            h.fillCircle(cx, cy, 7);
           } else {
-            h.lineStyle(2, 0xa8a29e, alpha);
-            h.strokeCircle(cx, 41, r);
+            h.lineStyle(2, EMPTY_PIP, alpha);
+            h.strokeCircle(cx, cy, 7);
           }
         }
+        const bonus = this.bonusLook(now, p);
+        if (bonus.scale > 0) {
+          for (let k2 = START_HP; k2 < START_HP + CATCH_UP_HP; k2++) {
+            const cx = x0 + 30 + k2 * 22;
+            // Demi-diagonale de 7 px : un carré de 10 px tourné de 45°.
+            const d = 7 * bonus.scale;
+            h.beginPath();
+            h.moveTo(cx, cy - d);
+            h.lineTo(cx + d, cy);
+            h.lineTo(cx, cy + d);
+            h.lineTo(cx - d, cy);
+            h.closePath();
+            if (k2 < bonus.hp) {
+              h.fillStyle(color, alpha);
+              h.fillPath();
+            } else {
+              h.lineStyle(2 * Math.min(1, bonus.scale), EMPTY_PIP, alpha);
+              h.strokePath();
+            }
+          }
+        }
+        let tag = this.bonusTexts.get(p.id);
+        if (tag === undefined) {
+          tag = this.add.text(0, 0, "rattrapage", { fontFamily: "Inter, sans-serif", fontSize: "11px", color: "#57534E", fontStyle: "500" });
+          tag.setOrigin(0, 0.5);
+          this.bonusTexts.set(p.id, tag);
+        }
+        tag.setPosition(x0 + 30 + (START_HP + CATCH_UP_HP - 1) * 22 + 17, cy).setAlpha(alpha * bonus.label).setVisible(bonus.label > 0);
         let name = this.nameTexts.get(p.id);
         if (name === undefined) {
-          name = this.add.text(x0 + 14, 11, "", { fontFamily: "Inter, sans-serif", fontSize: "14px", color: c.ink, fontStyle: "600" });
+          name = this.add.text(x0 + 14, y0 + 11, "", { fontFamily: "Inter, sans-serif", fontSize: "14px", color: c.ink, fontStyle: "600" });
           this.nameTexts.set(p.id, name);
         }
         const label = p.alive ? p.name : `${p.name} · éliminé`;
         if (name.text !== label) name.setText(label);
-        name.setPosition(x0 + 14, 11).setAlpha(alpha);
+        name.setPosition(x0 + 14, y0 + 11).setAlpha(alpha);
       });
     }
 
@@ -334,7 +439,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
           this.sprites.set(p.id, s);
         }
         s.setVisible(p.alive);
-        s.setPosition(px(p.x), HUD_PX + px(p.y) - 6);
+        s.setPosition(px(p.x), TOP + px(p.y) - 6);
       }
     }
 
@@ -373,7 +478,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
             break;
           }
           case "eliminated":
-            this.emitter(color).explode(48, px(fx.x), HUD_PX + px(fx.y));
+            this.emitter(color).explode(48, px(fx.x), TOP + px(fx.y));
             break;
           case "placed": {
             const [cx, cy] = cellCenter(fx.cell);
@@ -389,7 +494,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
             break;
           }
           case "pop":
-            this.emitter(color).explode(14, px(fx.x), HUD_PX + px(fx.y));
+            this.emitter(color).explode(14, px(fx.x), TOP + px(fx.y));
             if (fx.victim === session.you) this.cameras.main.shake(140, 0.006);
             break;
         }
@@ -401,7 +506,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     type: P.AUTO,
     parent,
     width: VIEW_W,
-    height: VIEW_H,
+    height: viewHeight(session.players.length),
     backgroundColor: "#F5F5F4",
     banner: false,
     input: { keyboard: false },

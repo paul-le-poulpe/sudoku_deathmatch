@@ -411,10 +411,10 @@ p {
   overflow-x: auto;
 }
 
+/* Hauteur : celle de .game-canvas, que screen.ts pose (568 px jusqu'à 2 joueurs, 626 px à 3 ou 4). */
 .game-stage {
   position: relative;
   width: 504px;
-  height: 568px;
 }
 
 .game-canvas {

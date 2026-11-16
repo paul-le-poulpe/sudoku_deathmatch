@@ -7,7 +7,7 @@ import type { ClientMessage, ServerMessage, TrapKind } from "@sudoku-deathmatch/
 import { playerColor } from "../colors.ts";
 import { LEVEL_LABEL } from "../levels.ts";
 import { Keyboard } from "./keyboard.ts";
-import { createGameView, type GameView } from "./scene.ts";
+import { createGameView, viewHeight, type GameView } from "./scene.ts";
 import { PlaySession } from "./session.ts";
 
 export interface PlayController {
@@ -56,6 +56,8 @@ export function startPlay(options: {
 
   const canvas = $("game-canvas");
   canvas.replaceChildren();
+  // Hauteur de la vue Phaser (bandeau des PV d'une ou deux lignes), posée avant qu'elle charge.
+  canvas.style.height = `${viewHeight(options.start.players.length)}px`;
   $("game-title").textContent = options.title;
   $("game-end").hidden = true;
 

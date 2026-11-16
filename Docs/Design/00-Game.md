@@ -25,11 +25,18 @@ Décidé par l'auteur le 15 novembre 2026.
 - **Points de vie.** Chaque bonhomme a des points de vie (PV), 4 au départ
   (décidé le 16 novembre 2026, après un essai à 5 ; 3 avant). Les PV de chaque
   joueur sont affichés en haut de la grille. À 0 PV, le bonhomme est éliminé.
+  Bandeau des PV : deux joueurs par ligne ; à 3 ou 4 joueurs, les joueurs 3
+  et 4 sont sur une seconde ligne, en grille 2 × 2 (décidé le 16 novembre 2026).
 - **Joueur en retard** (décidé le 16 novembre 2026). Un joueur qui a moins de
   la moitié des cases du premier a 6 PV au maximum au lieu de 4 : il reçoit
   2 PV quand il passe sous la moitié, et un chiffre juste le remet à 6. Quand
   il revient à la moitié ou plus, son maximum redevient 4 et les PV au-dessus
-  de 4 lui sont retirés. Le bandeau des PV montre alors 6 pastilles.
+  de 4 lui sont retirés. Dans le bandeau des PV, ces 2 PV sont deux losanges
+  de sa couleur, un peu séparés des 4 ronds et suivis du mot « rattrapage » en
+  petit gris ; ils apparaissent en grossissant et disparaissent en
+  rapetissant (décidé le 17 novembre 2026 : variante A de la maquette
+  « Sudoku Deathmatch — PV de rattrapage »,
+  https://claude.ai/artifact/MBSxyjWbMDJEDqLXmiLp9M).
 
   Provisoire :
   - le premier est celui qui a le plus de cases, éliminés compris ; un joueur

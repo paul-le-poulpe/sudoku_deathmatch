@@ -650,8 +650,20 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   après chaque chiffre juste, seul moment où un nombre de cases change. Le
   client ne les calcule pas lui-même : il prend `hpMax` dans `state` et
   `hp_max`.
-- **Pastilles des PV** (`scene.ts`, `drawHud`) : une par PV max ; à 6 dans la
-  case d'un joueur parmi 4, elles se resserrent (pas et rayon réduits).
+- **Bandeau des PV** (`scene.ts`, `drawHud`) : deux cases par ligne, dans
+  l'ordre de la salle. Pastilles (rayon 7 px, pas de 22 px) pleines de gauche
+  à droite : 4 ronds, puis en retard 2 losanges (demi-diagonale 7 px) décalés
+  de 8 px et « rattrapage » (Inter 11 px, `#57534E`) 10 px après. Losanges :
+  260 ms pour grossir (`easeOutBack`), 220 ms pour rapetisser (`easeInBack`) ;
+  mot : 300 ms après 150 ms, 150 ms pour disparaître ; pas d'animation au
+  premier dessin (début de partie, reconnexion). En rapetissant, les losanges
+  montrent les PV du dernier dessin d'avant `hp_max` (`bonusLook`) :
+  l'événement a déjà ramené les PV à 4 au plus.
+  Sa hauteur dépend du nombre de joueurs (`hudHeight` : 64 px, ou 122 px à 3 ou
+  4), donc celle de la vue aussi (`viewHeight`) : `screen.ts` la pose sur
+  `#game-canvas` avant que Phaser charge, et `.game-stage` (où se pose le fond
+  de fin) la suit. Le haut de la grille est `TOP` dans `createGameView`, plus
+  une constante du module.
 
 ## 10. Pièges
 
