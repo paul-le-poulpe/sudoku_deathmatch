@@ -1,5 +1,6 @@
 // Couleurs des joueurs (indices de 0 à PLAYER_COLOR_COUNT − 1, `packages/shared`) : palette « Classique »
-// de la maquette « Sudoku Deathmatch — couleurs », choisie par l'auteur le 15 novembre 2026.
+// de la maquette « Sudoku Deathmatch — couleurs », choisie par l'auteur le 15 novembre 2026 ; le 18 novembre,
+// Charbon (trop proche de l'encre de la grille) est remplacé par Rose, et Cyan est ajouté.
 // `color` : le bonhomme, ses PV et ses pièges (au moins 3:1 sur le blanc) ; `tint` : le fond d'une case
 // remplie (20 % de la couleur) ; `ink` : le texte de sa couleur (nom dans le bandeau, panneau), au moins
 // 4,6:1 sur `tint`. Le chiffre d'une case remplie est noir (essai, scene.ts).
@@ -17,7 +18,8 @@ export const PLAYER_COLORS: readonly PlayerColor[] = [
   { name: "Vert", color: "#2E7D32", tint: "#D5E5D6", ink: "#29712D" },
   { name: "Jaune", color: "#B7860B", tint: "#F1E7CE", ink: "#846008" },
   { name: "Violet", color: "#6A3FA0", tint: "#E1D9EC", ink: "#6A3FA0" },
-  { name: "Charbon", color: "#3D3D3D", tint: "#D8D8D8", ink: "#3D3D3D" },
+  { name: "Rose", color: "#DB2777", tint: "#F8D4E4", ink: "#B42062" },
+  { name: "Cyan", color: "#0891B2", tint: "#CEE9F0", ink: "#066D85" },
 ];
 
 export function playerColor(index: number): PlayerColor {

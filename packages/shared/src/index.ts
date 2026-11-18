@@ -29,8 +29,8 @@ export function isLevel(value: unknown): value is Level {
   return typeof value === "string" && (LEVELS as readonly string[]).includes(value);
 }
 
-/** Nombre de couleurs de joueur : indices de 0 à 5 de la palette du client. */
-export const PLAYER_COLOR_COUNT = 6;
+/** Nombre de couleurs de joueur : indices de 0 à 6 de la palette du client. */
+export const PLAYER_COLOR_COUNT = 7;
 
 export function isPlayerColor(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 0 && (value as number) < PLAYER_COLOR_COUNT;

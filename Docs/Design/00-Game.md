@@ -85,10 +85,13 @@ Décidé par l'auteur le 15 novembre 2026.
     la salle ;
   - la relance tire une nouvelle grille du même niveau et garde les joueurs
     connectés ; un joueur déconnecté à ce moment quitte la partie.
-- **Couleurs des joueurs** : palette « Classique » (bleu, rouge, vert, jaune,
-  violet, charbon), choisie par l'auteur le 15 novembre 2026 dans la maquette
-  « Sudoku Deathmatch — couleurs »
-  (https://claude.ai/artifact/Dg6n4JoXYZULWhgUf1D61n). Valeurs :
+- **Couleurs des joueurs** : sept couleurs (bleu, rouge, vert, jaune, violet,
+  rose, cyan). Les cinq premières viennent de la palette « Classique », choisie
+  par l'auteur le 15 novembre 2026 dans la maquette « Sudoku Deathmatch —
+  couleurs » (https://claude.ai/artifact/Dg6n4JoXYZULWhgUf1D61n) ; rose et cyan
+  ont été choisis par l'auteur le 18 novembre 2026. Pas de gris foncé ni de
+  noir : un bonhomme de cette couleur se confond avec l'encre de la grille
+  (traits des blocs, chiffres). Valeurs :
   `client/src/colors.ts`. Une case remplie par un joueur a le fond clair de
   sa couleur et un chiffre noir (essai demandé par l'auteur le 16 novembre
   2026 ; avant : chiffre dans la couleur du joueur).
@@ -141,8 +144,7 @@ de ce document font foi.
 
 - **Pièges** : `03-Pieges.md` §5.
 - **Couleurs et signaux rouges** : la palette a un rouge, et le chiffre refusé
-  clignote en rouge, la mine explose en rouge et orange ; le gris de la case
-  d'un joueur « Charbon » ressemble à celui des chiffres donnés.
+  clignote en rouge, la mine explose en rouge et orange.
 - **Collisions entre bonshommes** : la version 1 les laisse se traverser (§2) ;
   à décider plus tard.
 - **Regagner des PV** : possible ou non.
