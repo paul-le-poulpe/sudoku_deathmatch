@@ -154,6 +154,11 @@ boule est arrêtée : `01-Architecture.md` §3, Pièges et projectiles.
   bouclier, une bulle en anneau, de sa couleur plus claire, l'entoure, et les
   boules qui la touchent sont détruites. Les autres joueurs n'en profitent
   pas.
+- **La bulle montre la charge** (décidé le 18 novembre 2026 : variante B de la
+  maquette « Sudoku Deathmatch — charge du bouclier »,
+  https://claude.ai/artifact/WRdRgK6TUN94Hh6R4epVKV) : son anneau, plus marqué
+  qu'avant, est en pointillé. Plus le bouclier est chargé, plus les traits
+  sont longs et les espaces courts ; plein, c'est un cercle complet.
 - **Zone visible** (18 novembre 2026) : un cercle léger, sans remplissage,
   montre la zone d'effet (1,5 case autour de la case du bouclier). Seul le
   poseur le voit : il voit le cercle de chacun de ses boucliers dont son
@@ -169,11 +174,12 @@ boule est arrêtée : `01-Architecture.md` §3, Pièges et projectiles.
 - **Plusieurs boucliers** (18 novembre 2026) : si le bonhomme est dans la
   zone de plusieurs de ses boucliers, une boule arrêtée retire une unité au
   plus proche.
-- **Charge** : pleine, elle arrête 5 boules ; chaque boule arrêtée en retire
-  un cinquième. Elle se recharge en continu, de vide à pleine en 30 s. Un
-  bouclier en partie chargé arrête quand même des boules.
+- **Charge** (décidé le 18 novembre 2026 ; avant : 5 unités, pleine en 30 s) :
+  pleine, elle arrête 3 boules ; chaque boule arrêtée en retire un tiers.
+  Elle se recharge en continu, une unité en 15 s, donc de vide à pleine en
+  45 s. Un bouclier en partie chargé arrête quand même des boules.
 - **Jauge** : une barre verticale continue à droite du badge, sur presque
-  toute la hauteur de la case, partagée en 5 unités égales par des
+  toute la hauteur de la case, partagée en 3 unités égales par des
   interstices tous de la même taille ; une unité peut être en partie remplie.
   Elle doit se lire d'un coup d'œil (planche « Jauge de charge »).
 
@@ -188,12 +194,16 @@ Provisoire (choix de la maquette) :
   boule) ; à égalité de distance, le premier posé ;
 - la jauge est visible par tous ;
 - un bouclier est plein dès sa pose ;
-- la bulle grossit en 0,22 s et rapetisse en 0,18 s, s'éclaire 0,22 s quand
-  elle arrête une boule, qui éclate en particules de sa couleur ;
+- anneau de la bulle (maquette, variante B) : 4 px à 75 % (avant : 3 px à
+  40 %), 12 traits centrés sur des angles réguliers, le premier en haut ;
+  chacun couvre une part de son intervalle égale à la charge sur 3. La bulle
+  qui rapetisse garde les traits de la dernière charge vue ;
+- la bulle grossit en 0,22 s et rapetisse en 0,18 s, son anneau devient opaque
+  0,22 s quand elle arrête une boule, qui éclate en particules de sa couleur ;
 - le cercle de la zone apparaît et disparaît en fondu de 0,2 s ;
 - jauge : 5 px de large, 48 px de haut (4 px du haut de la case), unités de
-  8 px et interstices de 2 px, tous sur des pixels entiers ; une unité
-  entamée se remplit sur ses 8 px, sans compter l'interstice ;
+  14 px et interstices de 3 px, tous sur des pixels entiers ; une unité
+  entamée se remplit sur ses 14 px, sans compter l'interstice ;
 - touche : R (`KeyR`), à droite de celle de la tourelle.
 
 ## 5. Points ouverts

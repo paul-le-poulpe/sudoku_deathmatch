@@ -80,17 +80,18 @@ function badge(color: string): string {
 }
 
 /**
- * Jauge du bouclier, deux fois celle du jeu : 5 unités de 16 px et 4 interstices de 4 px ; une unité
- * entamée se remplit sur ses 16 px.
+ * Jauge du bouclier, deux fois celle du jeu : 3 unités de 28 px et 2 interstices de 6 px ; une unité
+ * entamée se remplit sur ses 28 px.
  */
 function gauge(charge: number): string {
-  const seg = 16;
-  const gap = 4;
-  const h = 5 * seg + 4 * gap;
+  const units = 3;
+  const seg = 28;
+  const gap = 6;
+  const h = units * seg + (units - 1) * gap;
   const whole = Math.floor(charge);
-  const fill = charge >= 5 ? h : whole * (seg + gap) + (charge - whole) * seg;
+  const fill = charge >= units ? h : whole * (seg + gap) + (charge - whole) * seg;
   let seps = "";
-  for (let k = 1; k < 5; k++) seps += `<span class="sep" style="top:${h - k * (seg + gap)}px"></span>`;
+  for (let k = 1; k < units; k++) seps += `<span class="sep" style="top:${h - k * (seg + gap)}px"></span>`;
   return `<span class="tuto-gauge" style="--c:${BLUE.color};--tint:${BLUE.tint};background:${rgba(BLUE.color, 0.2)}"><span class="fill" style="height:${fill}px"></span>${seps}</span>`;
 }
 
@@ -98,9 +99,12 @@ function shieldCell(charge: number, d = 4): string {
   return cell(BLUE.tint, badge(BLUE.color) + gauge(charge) + digit(d));
 }
 
-/** Bulle en anneau autour du bonhomme dessiné par `avatar(…, 18)` : rayon 0,4 case, anneau de 6 px à 40 %. */
+/**
+ * Bulle en anneau autour du bonhomme dessiné par `avatar(…, 18)` : rayon 0,4 case, anneau de 8 px à 75 %,
+ * complet (bouclier plein ; scene.ts le dessine en pointillé quand il ne l'est pas).
+ */
 function bubble(color: string): string {
-  return `<span class="tuto-bubble" style="background:${rgba(color, 0.08)};box-shadow:inset 0 0 0 6px ${rgba(color, 0.4)}"></span>`;
+  return `<span class="tuto-bubble" style="background:${rgba(color, 0.08)};box-shadow:inset 0 0 0 8px ${rgba(color, 0.75)}"></span>`;
 }
 
 /** Éclats de la boule arrêtée par la bulle, autour de (x, y). */
@@ -181,7 +185,7 @@ const STEPS: readonly Step[] = [
       `<div class="tuto-row tuto-row-wide">${cell(BLUE.tint, digit(7))}<div class="tuto-col">` +
       `<div class="tuto-row">${trapButton("mine", "Mine", "A")}${ARROW}${cell(BLUE.tint, mine(BLUE.color) + digit(7))}</div>` +
       `<div class="tuto-row">${trapButton("turret", "Tourelle", "E")}${ARROW}${cell(BLUE.tint, turret(BLUE.color) + digit(7))}</div>` +
-      `<div class="tuto-row">${trapButton("shield", "Bouclier", "R")}${ARROW}${shieldCell(5, 7)}</div>` +
+      `<div class="tuto-row">${trapButton("shield", "Bouclier", "R")}${ARROW}${shieldCell(3, 7)}</div>` +
       `</div></div>`,
   },
   {
@@ -211,13 +215,13 @@ const STEPS: readonly Step[] = [
     // Le cercle de la zone dépasse de 112 px au-dessus et au-dessous de la bande de cases.
     gap: 130,
     html: () =>
-      `<div class="tuto-strip">${shieldCell(5)}${cell("#FFFFFF", bubble(BLUE.color) + avatar(BLUE.color))}${cell("#FFFFFF")}${cell(RED.tint, turret(RED.color, -90) + digit(8))}` +
+      `<div class="tuto-strip">${shieldCell(3)}${cell("#FFFFFF", bubble(BLUE.color) + avatar(BLUE.color))}${cell("#FFFFFF")}${cell(RED.tint, turret(RED.color, -90) + digit(8))}` +
       `<span class="tuto-zone" style="border-color:${rgba(BLUE.color, 0.55)}"></span>` +
       `<span class="tuto-ball" style="--c:${RED.color};left:290px;top:47px;width:18px;height:18px;opacity:0.2"></span>` +
       `<span class="tuto-ball" style="--c:${RED.color};left:250px;top:45px;width:22px;height:22px;opacity:0.4"></span>` +
       sparks(213, 58, RED.color) +
       `</div>` +
-      `<div class="tuto-row">${shieldCell(5)}${ARROW}${shieldCell(4)}<span class="tuto-tag">1 boule arrêtée :<br>un cran de moins</span></div>`,
+      `<div class="tuto-row">${shieldCell(3)}${ARROW}${shieldCell(2)}<span class="tuto-tag">1 boule arrêtée :<br>un cran de moins</span></div>`,
   },
   {
     title: "Le coût des pièges",

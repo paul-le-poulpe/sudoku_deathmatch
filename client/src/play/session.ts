@@ -62,7 +62,7 @@ const ZONE_SHOW = 3 * CELL;
 const PLACED_TEXT: Readonly<Record<TrapKind, string>> = {
   mine: "Mine posée : tout le monde la voit.",
   turret: "Tourelle posée : premier tir dans 2 s, puis toutes les 6 s.",
-  shield: "Bouclier posé : à moins d’une case et demie, une bulle arrête 5 boules ; il se recharge en 30 s.",
+  shield: "Bouclier posé : à moins d’une case et demie, une bulle arrête 3 boules ; chaque charge revient en 15 s.",
 };
 
 /** Message d'une pose demandée sans assez de cases remplies (tourelle, bouclier). */
@@ -125,6 +125,8 @@ export interface ViewBubble {
   readonly player: number;
   readonly x: number;
   readonly y: number;
+  /** Charge du bouclier qui le protège, en unités (de 1 à SHIELD_UNITS, fractionnaire) : les traits de l'anneau. */
+  readonly charge: number;
 }
 
 /** Une boule à dessiner, en unités ; `progress` : avancement de la seconde d'attente, de 0 à 1. */
@@ -636,7 +638,8 @@ export class PlaySession {
     const bubbles: ViewBubble[] = [];
     if (shields.length > 0) {
       for (const p of players) {
-        if (p.alive && activeShield(shields, p.id, p.x, p.y, t) !== null) bubbles.push({ player: p.id, x: p.x, y: p.y });
+        const shield = p.alive ? activeShield(shields, p.id, p.x, p.y, t) : null;
+        if (shield !== null) bubbles.push({ player: p.id, x: p.x, y: p.y, charge: shieldCharge(shield.full, t) / SHIELD_UNIT_TICKS });
       }
     }
     return { traps, balls, bubbles };

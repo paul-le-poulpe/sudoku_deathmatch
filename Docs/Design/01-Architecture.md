@@ -720,7 +720,9 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
 - **Dessin du bouclier** (`scene.ts`) : badge dessiné une fois par couleur dans
   un canvas 2D (`Path2D` du chemin de la maquette), ajouté comme texture : les
   Graphics de Phaser ne suivent pas ses courbes. Jauge, cercle de la zone et
-  bulle sont des Graphics. Les chiffres ont un contour de 4 px de la couleur
+  bulle sont des Graphics ; l'anneau en pointillé de la bulle est un arc par
+  trait, d'après la charge que `PlaySession.hazards` donne à chaque bulle
+  (`ViewBubble.charge`). Les chiffres ont un contour de 4 px de la couleur
   du fond de leur case (`setStroke`), qui coupe le cercle de la zone.
 - **Dessin de la mine** (`scene.ts`, `PlaySession.hazards`) : la session donne
   pour chaque mine sa phase (`MineLook` : cadre de la pose, recharge, rebond),

@@ -60,7 +60,7 @@ function px(u: number): number {
 /**
  * Bouclier (planches « Dessins » et « Jauge de charge ») : le badge, dessiné dans une case de 56 px puis
  * réduit à 90 % autour de (28, 28,5), trait de 3 px à l'écran ; la jauge, barre de 5 × 48 px à 49 px du bord
- * gauche et 4 px du haut, 5 unités de 8 px séparées par 4 interstices de 2 px de la couleur du fond de la
+ * gauche et 4 px du haut, 3 unités de 14 px séparées par 2 interstices de 3 px de la couleur du fond de la
  * case, tous sur des pixels entiers (sinon les interstices paraissent inégaux).
  */
 const BADGE_PATH = "M28 6C34 9.5 40 10.5 47 10V27C47 40 38 47 28 51C18 47 9 40 9 27V10C16 10.5 22 9.5 28 6Z";
@@ -69,8 +69,8 @@ const BADGE_STROKE = 3;
 const GAUGE_X = 49;
 const GAUGE_Y = 4;
 const GAUGE_W = 5;
-const GAUGE_SEG = 8;
-const GAUGE_GAP = 2;
+const GAUGE_SEG = 14;
+const GAUGE_GAP = 3;
 const GAUGE_H = SHIELD_UNITS * GAUGE_SEG + (SHIELD_UNITS - 1) * GAUGE_GAP;
 /** Cercle de la zone (planche « Zone du bouclier », C) : trait de 2 px à 55 %, fondu de 0,2 s. */
 const ZONE_WIDTH = 2;
@@ -81,8 +81,15 @@ const ZONE_FADE_MS = 200;
  * (4 px de trait, donc 2 px autour du chiffre).
  */
 const DIGIT_HALO = 4;
-/** Bulle : anneau de 3 px à 40 %, fond à 8 %, 90 % au moment d'arrêter une boule ; grossit en 220 ms, rapetisse en 180. */
-const BUBBLE_RING = 3;
+/**
+ * Bulle (variante B de la maquette « charge du bouclier ») : anneau de 4 px à 75 %, en BUBBLE_DASHES traits
+ * centrés sur des angles réguliers (le premier en haut) ; chaque trait couvre une part de son intervalle
+ * égale à la charge sur SHIELD_UNITS, cercle complet quand le bouclier est plein. Fond à 8 %, anneau opaque
+ * au moment d'arrêter une boule ; grossit en 220 ms, rapetisse en 180.
+ */
+const BUBBLE_RING = 4;
+const BUBBLE_ALPHA = 0.75;
+const BUBBLE_DASHES = 12;
 const BUBBLE_IN_MS = 220;
 const BUBBLE_OUT_MS = 180;
 const BUBBLE_FLASH_MS = 220;
@@ -183,7 +190,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     /** Opacité du cercle de la zone de chacun de ses boucliers, par case, de 0 à 1. */
     readonly zoneFade = new Map<number, number>();
     /** Par joueur : bulle affichée ou non, depuis quand, où, et jusqu'à quand elle s'éclaire. */
-    readonly bubbleLook = new Map<number, { shown: boolean; since: number; x: number; y: number; flash: number }>();
+    readonly bubbleLook = new Map<number, { shown: boolean; since: number; x: number; y: number; flash: number; charge: number }>();
     lastBoard = -1;
     readonly cellTexts: Phaser.GameObjects.Text[] = [];
     readonly cellCache: string[] = [];
@@ -413,9 +420,10 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     }
 
     /**
-     * Bulles (03-Pieges §4), vues par tous : un anneau de la couleur du joueur autour de son bonhomme protégé.
-     * Elle grossit quand il entre dans la zone d'un bouclier chargé, rapetisse quand il en sort ou que la
-     * charge manque, et s'éclaire quand elle arrête une boule.
+     * Bulles (03-Pieges §4), vues par tous : un anneau en pointillé de la couleur du joueur autour de son
+     * bonhomme protégé, dont les traits montrent la charge du bouclier. Elle grossit quand il entre dans la
+     * zone d'un bouclier chargé, rapetisse quand il en sort ou que la charge manque (avec la dernière charge
+     * vue), et s'éclaire quand elle arrête une boule.
      */
     drawBubbles(now: number, view: readonly ViewPlayer[], bubbles: readonly ViewBubble[]): void {
       const g = this.bubbles;
@@ -425,7 +433,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         const on = bubbles.find((q) => q.player === p.id);
         let look = this.bubbleLook.get(p.id);
         if (look === undefined) {
-          look = { shown: false, since: -Infinity, x: p.x, y: p.y, flash: 0 };
+          look = { shown: false, since: -Infinity, x: p.x, y: p.y, flash: 0, charge: SHIELD_UNITS };
           this.bubbleLook.set(p.id, look);
         }
         const shown = on !== undefined && p.alive;
@@ -433,6 +441,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
           look.shown = shown;
           look.since = now;
         }
+        if (on !== undefined) look.charge = on.charge;
         if (p.alive) {
           look.x = p.x;
           look.y = p.y;
@@ -445,8 +454,21 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         const y = TOP + px(look.y) - 5;
         g.fillStyle(color, 0.08);
         g.fillCircle(x, y, r * scale);
-        g.lineStyle(BUBBLE_RING, color, now < look.flash ? 0.9 : 0.4);
-        g.strokeCircle(x, y, Math.max(0, r * scale - BUBBLE_RING / 2));
+        g.lineStyle(BUBBLE_RING, color, now < look.flash ? 1 : BUBBLE_ALPHA);
+        const ring = Math.max(0, r * scale - BUBBLE_RING / 2);
+        const part = clamp01(look.charge / SHIELD_UNITS);
+        if (part >= 1) {
+          g.strokeCircle(x, y, ring);
+          continue;
+        }
+        const step = (2 * Math.PI) / BUBBLE_DASHES;
+        const half = (step * part) / 2;
+        for (let k = 0; k < BUBBLE_DASHES; k++) {
+          const mid = -Math.PI / 2 + k * step;
+          g.beginPath();
+          g.arc(x, y, ring, mid - half, mid + half);
+          g.strokePath();
+        }
       }
     }
 

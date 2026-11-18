@@ -70,12 +70,13 @@ export const BUBBLE_RADIUS = 400;
 /** Distance entre les centres d'une boule et d'un bonhomme protégé en dessous de laquelle la bulle l'arrête. */
 export const BUBBLE_CONTACT = BUBBLE_RADIUS + BALL_RADIUS;
 /**
- * Charge d'un bouclier (décidé) : 5 unités, une par boule arrêtée ; elle remonte en continu, de vide à
- * pleine en 30 s, donc une unité toutes les 6 s (120 ticks). Comptée en ticks de recharge : pleine =
- * SHIELD_UNITS × SHIELD_UNIT_TICKS. Une boule n'est arrêtée que s'il reste au moins une unité (provisoire).
+ * Charge d'un bouclier (décidé le 18 novembre 2026) : 3 unités, une par boule arrêtée ; elle remonte en
+ * continu, une unité en 15 s (300 ticks), donc de vide à pleine en 45 s. Comptée en ticks de recharge :
+ * pleine = SHIELD_UNITS × SHIELD_UNIT_TICKS. Une boule n'est arrêtée que s'il reste au moins une unité
+ * (provisoire).
  */
-export const SHIELD_UNITS = 5;
-export const SHIELD_UNIT_TICKS = 120;
+export const SHIELD_UNITS = 3;
+export const SHIELD_UNIT_TICKS = 300;
 export const SHIELD_FULL_TICKS = SHIELD_UNITS * SHIELD_UNIT_TICKS;
 
 /**

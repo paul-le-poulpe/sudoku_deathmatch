@@ -110,7 +110,7 @@ Décidé par l'auteur le 15 novembre 2026.
   la croix, un clic sur le fond ou Échap aussi. Textes et images :
   `client/src/tutorial.ts`. Ses textes et ses images répètent des valeurs des
   règles (4 PV, 2 PV de la mine, 20 s de recharge, 1 PV par boule, une
-  tourelle pour 3 cases et un bouclier pour 5, 5 unités de charge) : quand
+  tourelle pour 3 cases et un bouclier pour 5, 3 unités de charge) : quand
   l'une change, le tutoriel change avec elle.
 - **Bots** (décidé le 18 novembre 2026). Dans la salle d'attente du solo,
   l'hôte ajoute des bots, qui remplissent une case toutes les n secondes selon
