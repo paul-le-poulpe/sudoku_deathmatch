@@ -162,9 +162,10 @@ boule est arrêtée : `01-Architecture.md` §3, Pièges et projectiles.
 - **Zone visible** (18 novembre 2026) : un cercle léger, sans remplissage,
   montre la zone d'effet (1,5 case autour de la case du bouclier). Seul le
   poseur le voit : il voit le cercle de chacun de ses boucliers dont son
-  bonhomme est à moins de 3 cases, en distance réelle (pas de Manhattan), et
-  qui peut encore arrêter une boule (décidé le 18 novembre 2026 : déchargé,
-  son cercle disparaît, comme la bulle). Les
+  bonhomme est dans la zone ou juste à côté, à environ une largeur de
+  bonhomme du cercle, pas de loin (décidé le 18 novembre 2026), et qui peut
+  encore arrêter une boule (décidé le 18 novembre 2026 : déchargé, son
+  cercle disparaît, comme la bulle). Les
   autres joueurs ne voient aucun cercle, seulement la bulle autour du
   bonhomme protégé. Il ne doit cacher aucun chiffre :
   trait de 2 px dans la couleur du poseur à 55 %, coupé autour des chiffres
@@ -190,6 +191,9 @@ boule est arrêtée : `01-Architecture.md` §3, Pièges et projectiles.
 Provisoire (choix de la maquette) :
 - la distance se mesure du centre du bonhomme au centre de la case du
   bouclier ;
+- le cercle de la zone se voit tant que cette distance est d'au plus 1,9 case :
+  1,5 case de zone plus une largeur de bonhomme (2 × `BODY_RADIUS`,
+  0,4 case), en distance réelle ;
 - une boule est arrêtée au contact de la bulle (rayon d'environ 0,4 case) ;
 - une boule n'est arrêtée que s'il reste au moins une unité de charge ; en
   dessous, la bulle et le cercle de la zone disparaissent ;

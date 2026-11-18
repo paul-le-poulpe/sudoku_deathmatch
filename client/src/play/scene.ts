@@ -400,8 +400,8 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     }
 
     /**
-     * Cercle de la zone de chacun de ses boucliers dont son bonhomme est à moins de 3 cases (session.ts,
-     * `zone`) : rayon de 1,5 case, en fondu. Dessiné sous les chiffres, dont le contour le coupe.
+     * Cercle de la zone de chacun de ses boucliers dont son bonhomme est dans la zone ou juste à côté
+     * (session.ts, `zone`) : rayon de 1,5 case, en fondu. Dessiné sous les chiffres, dont le contour le coupe.
      */
     drawZones(b: Phaser.GameObjects.Graphics, now: number, traps: readonly ViewTrap[]): void {
       const dt = this.lastBoard < 0 ? 0 : now - this.lastBoard;

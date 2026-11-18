@@ -8,11 +8,13 @@
 import {
   BALL_CHARGE_TICKS,
   BALL_CONTACT,
+  BODY_RADIUS,
   BUBBLE_CONTACT,
   CELL,
   MINE_REST_TICKS,
   MINE_SHRINK_TICKS,
   SHIELD_UNIT_TICKS,
+  SHIELD_ZONE,
   START_HP,
   TRAP_CELLS,
   activeShield,
@@ -54,10 +56,11 @@ const CANNON_HOLD_TICKS = 6;
 /** Rebond du cadre de la mine quand le grand cadre l'atteint (0,18 s). */
 const MINE_PULSE_TICKS = 3.6;
 /**
- * Le cercle de la zone d'un de ses boucliers se voit quand son bonhomme est à moins de 3 cases du centre de
- * sa case, en distance réelle (décidé, 03-Pieges §4).
+ * Le cercle de la zone d'un de ses boucliers se voit quand son bonhomme est dans la zone ou juste à côté
+ * (décidé, 03-Pieges §4) : centre du bonhomme à moins d'une largeur de bonhomme (2 × BODY_RADIUS, provisoire)
+ * au-delà du bord de la zone, en distance réelle.
  */
-const ZONE_SHOW = 3 * CELL;
+const ZONE_SHOW = SHIELD_ZONE + 2 * BODY_RADIUS;
 
 const PLACED_TEXT: Readonly<Record<TrapKind, string>> = {
   mine: "Mine posée : tout le monde la voit.",
@@ -116,7 +119,7 @@ export interface ViewTrap {
   readonly mine: MineLook | null;
   /** Bouclier : charge en unités, de 0 à 5, fractionnaire pendant la recharge. Sinon 0. */
   readonly charge: number;
-  /** Bouclier à soi, chargé d'une unité au moins, dont son bonhomme est à moins de 3 cases : le cercle de sa zone se voit. */
+  /** Bouclier à soi, chargé d'une unité au moins, dont son bonhomme est dans la zone ou juste à côté : le cercle de sa zone se voit. */
   readonly zone: boolean;
 }
 
