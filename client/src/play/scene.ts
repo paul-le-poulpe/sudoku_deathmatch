@@ -59,7 +59,7 @@ function px(u: number): number {
 
 /**
  * Bouclier (planches « Dessins » et « Jauge de charge ») : le badge, dessiné dans une case de 56 px puis
- * réduit à 90 % autour de (28, 28,5), trait de 3 px à l'écran ; la jauge, barre de 5 × 48 px à 49 px du bord
+ * réduit à 90 % autour de (28, 28,5), trait de 3 px à l'écran ; la jauge, barre de 3 × 48 px à 49 px du bord
  * gauche et 4 px du haut, 3 unités de 14 px séparées par 2 interstices de 3 px de la couleur du fond de la
  * case, tous sur des pixels entiers (sinon les interstices paraissent inégaux).
  */
@@ -68,7 +68,7 @@ const BADGE_SCALE = 0.9;
 const BADGE_STROKE = 3;
 const GAUGE_X = 49;
 const GAUGE_Y = 4;
-const GAUGE_W = 5;
+const GAUGE_W = 3;
 const GAUGE_SEG = 14;
 const GAUGE_GAP = 3;
 const GAUGE_H = SHIELD_UNITS * GAUGE_SEG + (SHIELD_UNITS - 1) * GAUGE_GAP;

@@ -181,7 +181,11 @@ boule est arrêtée : `01-Architecture.md` §3, Pièges et projectiles.
 - **Jauge** : une barre verticale continue à droite du badge, sur presque
   toute la hauteur de la case, partagée en 3 unités égales par des
   interstices tous de la même taille ; une unité peut être en partie remplie.
-  Elle doit se lire d'un coup d'œil (planche « Jauge de charge »).
+  Elle doit se lire d'un coup d'œil (planche « Jauge de charge »). Elle a
+  3 px de large, de 49 à 52 px du bord gauche de la case : plus à droite, le
+  contour du bonhomme qui se tient sur la case la cache (décidé le
+  18 novembre 2026, planche « Largeur de la jauge » de la maquette « charge
+  du bouclier »).
 
 Provisoire (choix de la maquette) :
 - la distance se mesure du centre du bonhomme au centre de la case du
@@ -201,7 +205,7 @@ Provisoire (choix de la maquette) :
 - la bulle grossit en 0,22 s et rapetisse en 0,18 s, son anneau devient opaque
   0,22 s quand elle arrête une boule, qui éclate en particules de sa couleur ;
 - le cercle de la zone apparaît et disparaît en fondu de 0,2 s ;
-- jauge : 5 px de large, 48 px de haut (4 px du haut de la case), unités de
+- jauge : 48 px de haut (4 px du haut de la case), unités de
   14 px et interstices de 3 px, tous sur des pixels entiers ; une unité
   entamée se remplit sur ses 14 px, sans compter l'interstice ;
 - touche : R (`KeyR`), à droite de celle de la tourelle.

@@ -1364,9 +1364,9 @@ p {
   position: absolute;
   left: 98px;
   top: 8px;
-  width: 10px;
+  width: 6px;
   height: 96px;
-  border-radius: 3px;
+  border-radius: 2px;
   overflow: hidden;
 }
 
