@@ -147,6 +147,8 @@ const AROUND_WRONG = [9, 2, null, null, 4, 1, null, 8] as const;
 interface Step {
   readonly title: string;
   readonly text: string;
+  /** Lien ajouté à la ligne sous `text`, ouvert dans un nouvel onglet. */
+  readonly link?: { readonly label: string; readonly href: string };
   /** Écart vertical entre le haut de l'image et les PV. */
   readonly gap: number;
   readonly html: () => string;
@@ -155,7 +157,8 @@ interface Step {
 const STEPS: readonly Step[] = [
   {
     title: "Remplissez une case",
-    text: "Sur une case vide, tapez son chiffre. Juste : la case est à vous, et vos PV remontent au maximum.",
+    text: "Remplissez une case correctement pour la gagner.\nVos PV remonteront au maximum.",
+    link: { label: "Règles du sudoku", href: "https://sudoku.com/fr/comment-jouer/regles-de-sudoku-pour-les-debutants-complets/" },
     gap: 104,
     html: () =>
       `<div class="tuto-row">${inGrid(cell("#FFFFFF", `<span class="tuto-frame" style="--c:${BLUE.color}"></span>${avatar(BLUE.color)}`), AROUND_FILL)}${key("7")}${ARROW}${inGrid(cell(BLUE.tint, digit(7)), AROUND_FILL)}</div>` +
@@ -258,7 +261,16 @@ export function setupTutorial(): void {
     const s = STEPS[step]!;
     $("tuto-count").textContent = `Comment jouer · ${step + 1} / ${STEPS.length}`;
     $("tuto-title").textContent = s.title;
-    $("tuto-desc").textContent = s.text;
+    const desc = $("tuto-desc");
+    desc.textContent = s.text;
+    if (s.link !== undefined) {
+      const a = document.createElement("a");
+      a.href = s.link.href;
+      a.textContent = s.link.label;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      desc.append("\n", a);
+    }
     illus.style.gap = `${s.gap}px`;
     illus.innerHTML = s.html();
     dots.forEach((d, i) => {

@@ -101,7 +101,10 @@ Décidé par l'auteur le 15 novembre 2026.
   des images : remplir une case, chiffre faux, « Améliorez vos cases » (poser
   un piège), la mine, la tourelle, le bouclier, le coût des pièges (ajoutées
   le 18 novembre 2026, à la demande de l'auteur, qui a aussi écrit les textes
-  des étapes 3, 5 et 6). « Jouer », à la dernière étape, ferme la fenêtre ;
+  des étapes 1, 3, 5 et 6). Le texte de l'étape 1 finit par un lien « Règles du
+  sudoku » vers
+  https://sudoku.com/fr/comment-jouer/regles-de-sudoku-pour-les-debutants-complets/,
+  ouvert dans un nouvel onglet. « Jouer », à la dernière étape, ferme la fenêtre ;
   la croix, un clic sur le fond ou Échap aussi. Textes et images :
   `client/src/tutorial.ts`. Ses textes et ses images répètent des valeurs des
   règles (4 PV, 2 PV de la mine, 20 s de recharge, 1 PV par boule, une

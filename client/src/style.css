@@ -903,6 +903,11 @@ p {
   white-space: pre-line;
 }
 
+.tuto-desc a {
+  color: var(--focus);
+  text-underline-offset: 3px;
+}
+
 .tuto-dots {
   display: flex;
   gap: 8px;
