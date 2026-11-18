@@ -47,8 +47,8 @@ Provisoire :
 - Un piège n'a aucun effet sur son poseur, et une tourelle ne vise jamais son
   poseur.
 - Les pièges d'un joueur éliminé restent actifs.
-- En solo, il n'y a pas d'adversaire : une tourelle ne fait apparaître aucune
-  boule, une mine n'explose jamais.
+- En solo sans bot (`04-Bots.md`), il n'y a pas d'adversaire : une tourelle
+  ne fait apparaître aucune boule, une mine n'explose jamais.
 - Limites : un piège par case, et le nombre de tourelles et de boucliers (§3,
   §4). Pas d'autre coût.
 - Touches : en plus des boutons, la touche à gauche de Z (A en AZERTY, Q en

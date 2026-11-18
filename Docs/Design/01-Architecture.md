@@ -35,7 +35,7 @@ transport.
 | --- | --- | --- |
 | `packages/shared` | formats des messages ; réglages communs (tick, nombre de joueurs, longueur des noms, couleurs) | rien |
 | `packages/engine` | la partie : grille (cases données, cases remplies, propriétaire de chaque case), bonshommes (position, direction), fonction de déplacement `move`, remplissage, pièges et trajectoire des boules (`ballAt`), fin de partie | rien |
-| `packages/room` | salle d'attente (reprise de `Room` de Fronts of Iron, §7) et partie lancée : file des entrées ; `step()` applique les entrées, avance le moteur d'un tick et renvoie un snapshot par joueur. Tire la grille du catalogue que lui passe l'enveloppe, la transforme (`02-Grilles.md`) et garde la solution | `shared`, `engine` |
+| `packages/room` | salle d'attente (reprise de `Room` de Fronts of Iron, §7) et partie lancée : file des entrées ; `step()` applique les entrées, avance le moteur d'un tick et renvoie un snapshot par joueur. Tire la grille du catalogue que lui passe l'enveloppe, la transforme (`02-Grilles.md`) et garde la solution. Joue les bots (`bot.ts`, §3, Bots) | `shared`, `engine` |
 | `packages/catalog` | catalogue des grilles des parties en ligne, avec leurs solutions, écrit par le script de `02-Grilles.md` §1. **Jamais importé par le client** | rien |
 | `client/` | page : accueil et salle d'attente en HTML ; partie affichée par Phaser (grille, bonshommes, PV, effets), clavier, prédiction de son bonhomme, interpolation des autres (§6) | `shared`, `engine`, Phaser ; `room` en solo |
 | `worker/` | page, lobby, et enveloppe Durable Object d'une partie : WebSocket, `setInterval` du tick, inscription et signaux au lobby | `room`, `shared`, `catalog` |
@@ -378,6 +378,31 @@ case ; une mine qui explose se recharge 20 s, puis sa pose se rejoue.
   message `exploded`. Une pose dans le futur veut dire « en recharge » : la
   mine est dessinée à 35 % pour tous, et l'hôte ne la déclenche pas.
 
+### Bots
+
+Règles : `04-Bots.md`. Implémenté le 18 novembre 2026.
+
+- **Joués par l'hôte, dans `packages/room`** (`bot.ts`, appelé par
+  `Match.step`). Pas d'horloge, pas de `Math.random` (`CLAUDE.md`, règle 2) :
+  le hasard vient d'une graine de `RoomEnv.randomSeed`, le temps est le numéro
+  de tick.
+- **En solo seulement** (`04-Bots.md` §1) : la salle refuse `add_bot`
+  (`no_bots`) sauf si l'enveloppe la crée avec `{ bots: true }`
+  (`RoomOptions`), ce que seul le Web Worker du solo fait. Le client ne montre
+  le bouton d'ajout qu'en solo, mais c'est la salle qui fait foi : le Durable
+  Object et plus tard `server/` ne passent pas l'option.
+- **Un bot envoie ce qu'enverrait un client**, par les mêmes méthodes de
+  `Match` que les messages des joueurs (`fill`, `place`, `hit`, `block`),
+  avec les mêmes limites par tick ; seule sa direction ne passe pas par la
+  file des entrées, elle s'applique au tick même. Le moteur ne fait pas de
+  différence, sauf pour la fin de partie (`Player.bot`, `04-Bots.md` §3).
+- **Il signale lui-même ses contacts** avec les boules (`hit`, ou `block` s'il
+  est protégé), calculés sur la position exacte de son bonhomme : sans cela,
+  seul le contrôle de l'hôte, avec sa marge de 0,3 case, le toucherait. Les
+  mines restent détectées par l'hôte.
+- **Il connaît la solution** (il est dans l'hôte) : elle ne sort pas plus
+  qu'avant.
+
 ### Remplissage, côté client
 
 La case reste « en attente » jusqu'à l'événement de l'hôte (un aller-retour) :
@@ -409,6 +434,7 @@ Messages de la salle repris : `join`, `welcome`, `room`, `set_color`, `start`,
 | `pause`, `paused` | pas de pause tant que `00-Game.md` n'en parle pas |
 | reconnexion : départ + tous les tours | reconnexion : `state` |
 | (rien) | `restart` : l'hôte relance une partie finie (`00-Game.md` §1, Fin de partie) ; chaque joueur connecté reçoit un nouveau `start`, qui porte l'`id` de l'hôte (`host`), puis `state` |
+| (rien) | `add_bot`, `set_bot {bot, color?, level?}`, `remove_bot {bot}` : l'hôte du solo, avant le lancement, ajoute, règle ou retire un bot (`04-Bots.md` §1) ; `bot` est son `id` dans la salle, et chaque joueur de `room` porte `bot` (difficulté, ou `null`). Un bot n'a pas de connexion ; son jeton n'est jamais envoyé |
 
 ## 5. Hébergement et quotas
 
@@ -609,6 +635,16 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
     Vérifié : typecheck, build du client, absence du catalogue en ligne dans
     `client/dist`. Pas vérifié : une partie jouée, l'affichage dans un
     navigateur.
+11. **Fait (18 novembre 2026) : bots** (`04-Bots.md`, §3 Bots). Hôte :
+    `packages/room/src/bot.ts` (`Bot.think`), bots dans `Match` (graine
+    tirée au lancement) et dans la salle (`Member.bot`, `add_bot`, `set_bot`,
+    `remove_bot`, gardés à la relance ; `RoomOptions.bots`, en solo
+    seulement). Moteur : `Player.bot`, fin de partie
+    quand plus aucun joueur humain n'est en vie. Client : places des bots
+    dans la salle d'attente (`botSlot` de `main.ts`), solo à 4 places.
+    Vérifié : typecheck, build du client, absence du catalogue en ligne dans
+    `client/dist`. Pas vérifié : une partie jouée, l'affichage dans un
+    navigateur.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -656,9 +692,18 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   bonhomme 0,2). Le client teste à chaque tick local sa position dessinée ;
   l'hôte compte lui-même un contact sous 0,05 case (marge de 0,3 case). Une
   boule ne touche qu'une fois : elle disparaît.
-- **Ordre d'un tick de l'hôte** : déplacements, remplissages, poses, contacts
-  signalés, boules arrêtées signalées, départs puis apparitions des boules,
-  contrôle des boules, mines, fin de partie.
+- **Ordre d'un tick de l'hôte** : entrées des joueurs sorties des files, puis
+  ce qu'envoient les bots (d'après l'état du tick précédent), puis dans le
+  moteur : déplacements, remplissages, poses, contacts signalés, boules
+  arrêtées signalées, départs puis apparitions des boules, contrôle des
+  boules, mines, fin de partie.
+- **Bots** (`bot.ts`) : deux minuteries par bot, en ticks, la décision d'un
+  chiffre (`BOT_FILL_SECONDS`) et la promenade (`BOT_ROAM_SECONDS`). Le pas
+  vers la case visée (à remplir, ou de la promenade) est tout droit vers son
+  centre, un axe à moins d'un demi-pas comptant comme atteint ; à 1 PV, vers
+  le centre de la case voisine (4 voisines) du plus court chemin sans mine
+  adverse, recalculé à chaque tick. L'écart devant une boule est arrondi à la
+  plus proche des 8 directions.
 - **Limites par tick et par joueur** : 2 poses, 4 contacts signalés, `hit` et
   `block` ensemble (comme les 4 remplissages).
 - **Canon** : dessiné vers le bonhomme adverse le plus proche tel que ce client

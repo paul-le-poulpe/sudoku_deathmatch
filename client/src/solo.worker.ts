@@ -26,7 +26,8 @@ function post(out: readonly Outgoing[]): void {
 self.addEventListener("message", (event: MessageEvent<unknown>) => {
   const data = event.data as { type?: unknown; name?: unknown; color?: unknown } | null;
   if (data !== null && typeof data === "object" && data.type === "init") {
-    room = new Room(env, GRIDS);
+    // Les bots ne sont permis qu'en solo (04-Bots §1).
+    room = new Room(env, GRIDS, { bots: true });
     post(room.handle(CONN, { type: "join", name: data.name, token: room.hostToken, color: data.color }));
     return;
   }

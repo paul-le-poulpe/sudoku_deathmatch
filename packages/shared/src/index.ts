@@ -29,6 +29,15 @@ export function isLevel(value: unknown): value is Level {
   return typeof value === "string" && (LEVELS as readonly string[]).includes(value);
 }
 
+/** Difficultés d'un bot (04-Bots §1) : seul le rythme des chiffres change. */
+export const BOT_LEVELS = ["facile", "normal", "difficile"] as const;
+export type BotLevel = (typeof BOT_LEVELS)[number];
+export const DEFAULT_BOT_LEVEL: BotLevel = "normal";
+
+export function isBotLevel(value: unknown): value is BotLevel {
+  return typeof value === "string" && (BOT_LEVELS as readonly string[]).includes(value);
+}
+
 /** Nombre de couleurs de joueur : indices de 0 à 6 de la palette du client. */
 export const PLAYER_COLOR_COUNT = 7;
 
@@ -123,6 +132,12 @@ export type ClientMessage =
   | { readonly type: "set_color"; readonly color: number }
   /** Hôte seulement, avant le lancement : niveau de la grille. */
   | { readonly type: "set_level"; readonly level: Level }
+  /** Hôte du solo seulement, avant le lancement : un bot de plus (04-Bots §1), première couleur libre, niveau Normal. */
+  | { readonly type: "add_bot" }
+  /** Hôte seulement, avant le lancement : couleur ou difficulté du bot `bot` (son `id` dans la salle). */
+  | { readonly type: "set_bot"; readonly bot: number; readonly color?: number; readonly level?: BotLevel }
+  /** Hôte seulement, avant le lancement : retire le bot `bot`. */
+  | { readonly type: "remove_bot"; readonly bot: number }
   /** Hôte seulement : lance la partie. */
   | { readonly type: "start" }
   /** Hôte seulement, partie finie : relance une partie avec les joueurs connectés (00-Game §1). */
@@ -155,6 +170,8 @@ export interface RoomPlayer {
   readonly name: string;
   readonly host: boolean;
   readonly color: number;
+  /** Difficulté d'un bot joué par l'hôte (04-Bots) ; `null` pour un joueur. */
+  readonly bot: BotLevel | null;
 }
 
 export interface StartPlayer {
@@ -244,7 +261,10 @@ export type RoomErrorCode =
   | "color_taken"
   | "replaced"
   | "not_started"
-  | "not_ended";
+  | "not_ended"
+  | "unknown_bot"
+  | "invalid_bot_level"
+  | "no_bots";
 
 /** Texte de chaque erreur de la salle, envoyé avec le code : la page l'affiche tel quel. */
 export const ROOM_ERROR_TEXT: Readonly<Record<RoomErrorCode, string>> = {
@@ -261,6 +281,9 @@ export const ROOM_ERROR_TEXT: Readonly<Record<RoomErrorCode, string>> = {
   replaced: "Vous êtes connecté à cette partie depuis un autre onglet ou un autre appareil.",
   not_started: "Message refusé par le serveur : la partie n'est pas encore lancée.",
   not_ended: "La partie n'est pas finie : on ne peut pas encore la relancer.",
+  unknown_bot: "Ce bot n'est plus dans la salle.",
+  invalid_bot_level: "Difficulté de bot inconnue.",
+  no_bots: "Les bots ne sont disponibles qu'en solo.",
 };
 
 export type ServerMessage =

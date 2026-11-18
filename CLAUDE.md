@@ -35,6 +35,8 @@ inventée.
   lancement, mesure de la difficulté ; fait foi pour ce domaine.
 - `Docs/Design/03-Pieges.md` — pièges posés sur ses cases : pose, mine,
   tourelle ; fait foi pour ce domaine.
+- `Docs/Design/04-Bots.md` — bots joués par l'hôte : ajout dans la salle,
+  difficulté, comportement ; fait foi pour ce domaine.
 
 ---
 
@@ -50,7 +52,8 @@ packages/
   shared/    formats des messages et réglages communs (tick, joueurs, noms, couleurs)
   engine/    la partie : grille, bonshommes, déplacement, remplissage, pièges, fin de partie
   room/      salle d'attente et partie côté hôte : entrées → moteur → snapshots ;
-             tire la grille du catalogue, la transforme, garde la solution
+             tire la grille du catalogue, la transforme, garde la solution ;
+             joue les bots (bot.ts)
   catalog/   grilles des parties en ligne et leurs solutions (02-Grilles.md) ;
              jamais importé par client/
 client/      page du jeu (Vite + TypeScript) : accueil et salle d'attente en HTML,

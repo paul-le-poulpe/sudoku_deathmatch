@@ -1,6 +1,13 @@
 // Noms et descriptions des niveaux affichés dans la salle d'attente (02-Grilles §3, provisoire).
 
-import type { Level } from "@sudoku-deathmatch/shared";
+import type { BotLevel, Level } from "@sudoku-deathmatch/shared";
+
+/** Difficultés d'un bot (04-Bots §1) : seul le rythme des chiffres change. */
+export const BOT_LEVEL_LABEL: Readonly<Record<BotLevel, string>> = {
+  facile: "Facile",
+  normal: "Normal",
+  difficile: "Difficile",
+};
 
 export const LEVEL_LABEL: Readonly<Record<Level, string>> = {
   facile: "Facile",

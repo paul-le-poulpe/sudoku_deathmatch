@@ -15,9 +15,10 @@ une partie.
 En développement : les règles sont dans `Docs/Design/00-Game.md`, et les
 valeurs de réglage (vitesse, niveaux…) sont des valeurs d'essai.
 
-Ce qui se joue aujourd'hui : le **solo** (seul sur la grille, dans le
-navigateur) et les **parties hébergées par Cloudflare** (on crée une partie, on
-la rejoint, l'hôte la lance depuis la salle d'attente).
+Ce qui se joue aujourd'hui : le **solo** (dans le navigateur, seul sur la
+grille ou contre des bots ajoutés dans la salle d'attente) et les **parties
+hébergées par Cloudflare** (on crée une partie, on la rejoint, l'hôte la lance
+depuis la salle d'attente).
 
 ---
 
@@ -68,8 +69,10 @@ au Worker.
 | 1 à 9 | écrire ce chiffre dans la case sous le bonhomme |
 | A (Q en QWERTY) | poser une mine sur la case sous le bonhomme, s'il l'a remplie |
 | E | poser une tourelle sur la case sous le bonhomme, s'il l'a remplie |
+| R | poser un bouclier sur la case sous le bonhomme, s'il l'a remplie |
 
-En solo, les pièges se posent mais ne font rien : il n'y a pas d'adversaire.
+En solo sans bot, les pièges se posent mais ne font rien : il n'y a pas
+d'adversaire.
 
 ## Mise en ligne
 

@@ -35,6 +35,8 @@ export const TRAP_CELLS: Readonly<Record<TrapKind, number>> = { mine: 0, turret:
 
 export interface Player {
   readonly id: number;
+  /** Bonhomme joué par l'hôte (04-Bots) : la partie finit quand plus aucun joueur qui n'en est pas un n'est en vie. */
+  readonly bot: boolean;
   x: number;
   y: number;
   dir: number;
@@ -154,9 +156,14 @@ export interface TickInput {
 
 /**
  * `puzzle` et `solution` : 81 chiffres, ligne par ligne (0 pour une case vide de `puzzle`). `playerIds` :
- * les joueurs dans l'ordre, qui fixe leur position de départ (au plus 4).
+ * les joueurs dans l'ordre, qui fixe leur position de départ (au plus 4). `botIds` : ceux qui sont des bots.
  */
-export function createGame(puzzle: ArrayLike<number>, solution: ArrayLike<number>, playerIds: readonly number[]): Game {
+export function createGame(
+  puzzle: ArrayLike<number>,
+  solution: ArrayLike<number>,
+  playerIds: readonly number[],
+  botIds: ReadonlySet<number> = new Set(),
+): Game {
   if (puzzle.length !== 81 || solution.length !== 81) throw new Error("grille de 81 cases attendue");
   if (playerIds.length < 1 || playerIds.length > SPAWNS.length) throw new Error("1 à 4 joueurs");
   const digits = new Uint8Array(81);
@@ -167,7 +174,7 @@ export function createGame(puzzle: ArrayLike<number>, solution: ArrayLike<number
   }
   const players = playerIds.map((id, k): Player => {
     const [x, y] = SPAWNS[k]!;
-    return { id, x, y, dir: 0, hp: START_HP, hpMax: START_HP, alive: true, score: 0, outTick: 0 };
+    return { id, bot: botIds.has(id), x, y, dir: 0, hp: START_HP, hpMax: START_HP, alive: true, score: 0, outTick: 0 };
   });
   return { tick: 0, solution: Uint8Array.from(solution), digits, owner, players, traps: [], balls: [], lastBall: 0, ranking: null };
 }
@@ -442,16 +449,18 @@ function near(p: Player, cell: number): boolean {
 }
 
 /**
- * Le classement si la partie est finie, sinon `null` (00-Game §1, Fin de partie). Finie : grille pleine, ou
- * il ne reste qu'un bonhomme (aucun en solo). D'abord les survivants, au nombre de cases remplies ; puis les
- * éliminés, du dernier éliminé au premier. Provisoire : à égalité de cases, ou pour deux éliminations du
- * même tick, celui qui a rempli le plus de cases, puis l'ordre des joueurs (`sort` est stable).
+ * Le classement si la partie est finie, sinon `null` (00-Game §1, Fin de partie). Finie : grille pleine, il
+ * ne reste qu'un bonhomme (aucun en solo), ou plus aucun joueur qui n'est pas un bot (04-Bots §3,
+ * provisoire). D'abord les survivants, au nombre de cases remplies ; puis les éliminés, du dernier éliminé
+ * au premier. Provisoire : à égalité de cases, ou pour deux éliminations du même tick, celui qui a rempli
+ * le plus de cases, puis l'ordre des joueurs (`sort` est stable).
  */
 function finalRanking(game: Game): RankEntry[] | null {
   const alive = game.players.filter((p) => p.alive).length;
+  const humans = game.players.filter((p) => p.alive && !p.bot).length;
   const full = !game.owner.includes(0);
   const solo = game.players.length === 1;
-  if (!full && !(solo ? alive === 0 : alive <= 1)) return null;
+  if (!full && humans > 0 && !(solo ? alive === 0 : alive <= 1)) return null;
   const survivors = game.players.filter((p) => p.alive).sort((a, b) => b.score - a.score);
   const out = game.players.filter((p) => !p.alive).sort((a, b) => b.outTick - a.outTick || b.score - a.score);
   return survivors.concat(out).map((p) => ({ player: p.id, score: p.score, alive: p.alive }));

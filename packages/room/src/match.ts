@@ -3,7 +3,16 @@
 // Comme `Room`, elle ne connaît ni horloge ni réseau : l'enveloppe appelle `step` à chaque tick.
 
 import { createGame, step, type BlockRequest, type FillRequest, type Game, type HitRequest, type PlaceRequest } from "@sudoku-deathmatch/engine";
-import type { GameEvent, PlayerState, ServerMessage, TrapKind } from "@sudoku-deathmatch/shared";
+import type { BotLevel, GameEvent, PlayerState, ServerMessage, TrapKind } from "@sudoku-deathmatch/shared";
+
+import { Bot } from "./bot.ts";
+import { makeRng } from "./grid.ts";
+
+/** Un joueur de la partie : `bot` est la difficulté d'un bot joué par l'hôte, `null` pour un joueur. */
+export interface MatchPlayer {
+  readonly id: number;
+  readonly bot: BotLevel | null;
+}
 
 /** Entrées en attente au-delà desquelles l'hôte ne garde que la dernière (01-Architecture §3, provisoire). */
 export const MAX_QUEUED_INPUTS = 2;
@@ -38,12 +47,17 @@ export class Match {
   #places: PlaceRequest[] = [];
   #hits: HitRequest[] = [];
   #blocks: BlockRequest[] = [];
+  readonly #bots: Bot[];
 
-  constructor(puzzle: readonly number[], solution: readonly number[], playerIds: readonly number[]) {
-    this.game = createGame(puzzle, solution, playerIds);
-    for (const id of playerIds) {
+  /** `seed` : le hasard des bots (cases visées, instant de leur première décision). */
+  constructor(puzzle: readonly number[], solution: readonly number[], players: readonly MatchPlayer[], seed: number) {
+    const ids = players.map((p) => p.id);
+    this.game = createGame(puzzle, solution, ids, new Set(players.filter((p) => p.bot !== null).map((p) => p.id)));
+    for (const id of ids) {
       this.#tracks.set(id, { queue: [], received: 0, appliedSeq: 0, appliedTick: 0, fillsThisTick: 0, placesThisTick: 0, hitsThisTick: 0 });
     }
+    const rnd = makeRng(seed);
+    this.#bots = players.flatMap((p) => (p.bot === null ? [] : [new Bot(p.id, p.bot, rnd)]));
   }
 
   get ended(): boolean {
@@ -109,7 +123,11 @@ export class Match {
     this.#blocks.push({ player, ball });
   }
 
-  /** Un tick : une entrée par joueur sortie de sa file, les remplissages, poses et contacts reçus, puis le moteur. */
+  /**
+   * Un tick : une entrée par joueur sortie de sa file, ce que chaque bot envoie (04-Bots), les remplissages,
+   * poses et contacts reçus, puis le moteur. Les bots passent par les mêmes méthodes que les messages des
+   * joueurs, sans file : leur direction s'applique à ce tick.
+   */
   step(): GameEvent[] {
     const dirs = new Map<number, number>();
     const tick = this.game.tick + 1;
@@ -122,6 +140,15 @@ export class Match {
       dirs.set(player, next.dir);
       track.appliedSeq = next.seq;
       track.appliedTick = tick;
+    }
+    for (const bot of this.#bots) {
+      const act = bot.think(this.game);
+      if (act === null) continue;
+      dirs.set(bot.id, act.dir);
+      if (act.fill !== null) this.fill(bot.id, act.fill.cell, act.fill.digit);
+      if (act.place !== null) this.place(bot.id, act.place.cell, act.place.kind);
+      for (const ball of act.hits) this.hit(bot.id, ball);
+      for (const ball of act.blocks) this.block(bot.id, ball);
     }
     const fills = this.#fills;
     const places = this.#places;

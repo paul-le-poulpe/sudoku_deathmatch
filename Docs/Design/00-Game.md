@@ -11,6 +11,8 @@ Documents thématiques :
 - `03-Pieges.md` — ce qu'un joueur pose sur ses cases pour gêner les autres :
   pose, mine, tourelle ; ajoutés après la version 1. Règles remplacées, qui ne
   font pas foi : `03-Pieges-History.md`.
+- `04-Bots.md` — bonshommes joués par l'hôte, ajoutés dans la salle d'attente :
+  ajout, difficulté, comportement, fin de partie avec des bots.
 
 ---
 
@@ -110,8 +112,10 @@ Décidé par l'auteur le 15 novembre 2026.
   règles (4 PV, 2 PV de la mine, 20 s de recharge, 1 PV par boule, une
   tourelle pour 3 cases et un bouclier pour 5, 5 unités de charge) : quand
   l'une change, le tutoriel change avec elle.
-- **Bots.** Il pourra y en avoir à terme, pas avant que les fonctionnalités du
-  jeu soient en place.
+- **Bots** (décidé le 18 novembre 2026). Dans la salle d'attente du solo,
+  l'hôte ajoute des bots, qui remplissent une case toutes les n secondes selon
+  leur difficulté et posent des pièges. Simples, ils servent de remplaçants
+  pendant le développement. Règles : `04-Bots.md`.
 
 ## 2. Version 1
 
@@ -129,14 +133,17 @@ elles pourront changer ensuite.
   ne peut plus rien faire ; ses cases gardent sa couleur ; le joueur continue de
   voir la partie.
 - **Fin** : la grille est pleine, ou il ne reste qu'un bonhomme (§1). En solo,
-  la partie finit aussi quand le joueur est éliminé.
+  la partie finit aussi quand le joueur est éliminé ; avec des bots :
+  `04-Bots.md` §3.
 - **Classement et relance** : §1, Fin de partie.
 - **Difficulté** : trois niveaux, choisis par l'hôte dans la salle d'attente
   (`02-Grilles.md` §3).
-- **Solo** : le joueur seul sur la grille, sans bots.
+- **Solo** : le joueur seul sur la grille, sans bots (bots ajoutés ensuite,
+  `04-Bots.md`).
 - **Pas de pause.** L'hôte peut lancer la partie sans attendre d'autres
   joueurs.
-- **Pas dans la version 1** : pièges (ajoutés ensuite, `03-Pieges.md`), bots.
+- **Pas dans la version 1** : pièges (ajoutés ensuite, `03-Pieges.md`), bots
+  (ajoutés ensuite, `04-Bots.md`).
 
 Maquette jouable (15 novembre 2026) : artifact « Sudoku Deathmatch —
 maquette » (accueil, création, salle d'attente, partie). Elle n'a pas encore
@@ -146,6 +153,7 @@ de ce document font foi.
 ## 3. Points ouverts
 
 - **Pièges** : `03-Pieges.md` §5.
+- **Bots** : `04-Bots.md` §4.
 - **Couleurs et signaux rouges** : la palette a un rouge, et le chiffre refusé
   clignote en rouge, la mine explose en rouge et orange.
 - **Collisions entre bonshommes** : la version 1 les laisse se traverser (§2) ;

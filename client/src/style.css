@@ -27,7 +27,8 @@ body {
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
@@ -335,6 +336,69 @@ p {
   color: var(--muted);
 }
 
+/* Bots (04-Bots §1) : la première place libre ajoute un bot ; la place d'un bot a deux lignes pour l'hôte. */
+.slot-add {
+  font: inherit;
+  font-weight: 600;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.slot-add:hover {
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+.slot-bot {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 14px 10px;
+}
+
+.slot-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.bot-level {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.slot-remove {
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.slot-remove:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.bot-colors {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 30px;
+}
+
 .swatch-dot {
   width: 18px;
   height: 18px;
@@ -362,6 +426,15 @@ p {
 
 .swatch:disabled {
   opacity: 0.3;
+}
+
+.swatch-small {
+  width: 24px;
+  height: 24px;
+}
+
+.swatch-small[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--ink);
 }
 
 .pills {

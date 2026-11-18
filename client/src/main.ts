@@ -2,11 +2,11 @@
 // (play/screen.ts). Une seule connexion à la fois, WebSocket en ligne ou Web Worker en solo
 // (connection.ts) : elle reste ouverte de la salle d'attente à la fin de la partie.
 
-import { LEVELS, MAX_PLAYERS, cloudflareGamePath, type LobbyEntry, type ServerMessage } from "@sudoku-deathmatch/shared";
+import { BOT_LEVELS, LEVELS, MAX_PLAYERS, cloudflareGamePath, type LobbyEntry, type RoomPlayer, type ServerMessage } from "@sudoku-deathmatch/shared";
 
 import { PLAYER_COLORS } from "./colors.ts";
 import { soloConnection, webSocketConnection, type Connection } from "./connection.ts";
-import { LEVEL_LABEL, LEVEL_TEXT } from "./levels.ts";
+import { BOT_LEVEL_LABEL, LEVEL_LABEL, LEVEL_TEXT } from "./levels.ts";
 import {
   NETWORK_ERROR_TEXT,
   gameAction,
@@ -136,7 +136,7 @@ function renderRoom(session: Session, msg: Extract<ServerMessage, { type: "room"
   const me = msg.players.find((p) => p.id === msg.you);
   const host = msg.players.find((p) => p.host);
   const isHost = me?.host === true;
-  const max = solo ? 1 : MAX_PLAYERS;
+  const max = MAX_PLAYERS;
 
   $("room-title").textContent = session.title;
   $("room-sub").textContent = solo
@@ -147,8 +147,24 @@ function renderRoom(session: Session, msg: Extract<ServerMessage, { type: "room"
   $("room-count").textContent = `Joueurs (${msg.players.length}/${max})`;
 
   const slots: HTMLElement[] = [];
+  let addOffered = false;
   for (let k = 0; k < max; k++) {
     const p = msg.players[k];
+    if (p === undefined && solo && isHost && !addOffered) {
+      // En solo, la première place libre est un bouton qui ajoute un bot (04-Bots §1).
+      addOffered = true;
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "slot slot-empty slot-add";
+      add.textContent = "+ Ajouter un bot";
+      add.addEventListener("click", () => session.conn.send({ type: "add_bot" }));
+      slots.push(add);
+      continue;
+    }
+    if (p !== undefined && p.bot !== null) {
+      slots.push(botSlot(session, msg.players, p, isHost));
+      continue;
+    }
     const slot = document.createElement("div");
     if (p === undefined) {
       slot.className = "slot slot-empty";
@@ -204,6 +220,76 @@ function renderRoom(session: Session, msg: Extract<ServerMessage, { type: "room"
   $("room-host").hidden = !isHost;
   $("room-guest").hidden = isHost;
   showError("room-error", null);
+}
+
+/**
+ * La place d'un bot (04-Bots §1). Pour l'hôte : sa difficulté (liste), un bouton pour le retirer, et ses
+ * couleurs, celles des autres joueurs grisées. Pour les autres : son nom et sa difficulté.
+ */
+function botSlot(session: Session, players: readonly RoomPlayer[], bot: RoomPlayer, isHost: boolean): HTMLElement {
+  const slot = document.createElement("div");
+  slot.className = "slot slot-bot";
+  const line = document.createElement("div");
+  line.className = "slot-line";
+  const dot = document.createElement("span");
+  dot.className = "swatch-dot";
+  dot.style.background = PLAYER_COLORS[bot.color]?.color ?? "#000";
+  const name = document.createElement("span");
+  name.className = "slot-name";
+  name.textContent = bot.name;
+  line.append(dot, name);
+  slot.append(line);
+  const level = bot.bot ?? "normal";
+  if (!isHost) {
+    const tag = document.createElement("span");
+    tag.className = "slot-tag";
+    tag.textContent = `bot · ${BOT_LEVEL_LABEL[level]}`;
+    line.append(tag);
+    return slot;
+  }
+
+  const select = document.createElement("select");
+  select.className = "bot-level";
+  select.setAttribute("aria-label", `Difficulté de ${bot.name}`);
+  for (const l of BOT_LEVELS) {
+    const option = document.createElement("option");
+    option.value = l;
+    option.textContent = BOT_LEVEL_LABEL[l];
+    option.selected = l === level;
+    select.append(option);
+  }
+  select.addEventListener("change", () => {
+    const value = BOT_LEVELS.find((l) => l === select.value);
+    if (value !== undefined) session.conn.send({ type: "set_bot", bot: bot.id, level: value });
+  });
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "slot-remove";
+  remove.textContent = "Retirer";
+  remove.setAttribute("aria-label", `Retirer ${bot.name}`);
+  remove.addEventListener("click", () => session.conn.send({ type: "remove_bot", bot: bot.id }));
+  line.append(select, remove);
+
+  const taken = players.filter((p) => p.id !== bot.id).map((p) => p.color);
+  const colors = document.createElement("div");
+  colors.className = "bot-colors";
+  colors.setAttribute("role", "group");
+  colors.setAttribute("aria-label", `Couleur de ${bot.name}`);
+  colors.append(
+    ...PLAYER_COLORS.map((c, index) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "swatch swatch-small";
+      b.style.background = c.color;
+      b.disabled = taken.includes(index);
+      b.setAttribute("aria-pressed", String(bot.color === index));
+      b.setAttribute("aria-label", c.name + (b.disabled ? " (prise)" : ""));
+      b.addEventListener("click", () => session.conn.send({ type: "set_bot", bot: bot.id, color: index }));
+      return b;
+    }),
+  );
+  slot.append(colors);
+  return slot;
 }
 
 $("room-start").addEventListener("click", () => current?.conn.send({ type: "start" }));

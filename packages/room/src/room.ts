@@ -7,15 +7,18 @@
 // catalogue des grilles est celui de l'enveloppe (02-Grilles §1).
 
 import {
+  DEFAULT_BOT_LEVEL,
   DEFAULT_LEVEL,
   MAX_INPUT_DIRS,
   MAX_PLAYERS,
   ROOM_ERROR_TEXT,
+  isBotLevel,
   isLevel,
   isPlayerColor,
   isTrapKind,
   normalizePlayerName,
   pickPlayerColor,
+  type BotLevel,
   type ClientMessage,
   type GameEvent,
   type Level,
@@ -34,6 +37,14 @@ export interface RoomEnv {
   newToken(): string;
   /** Une graine tirée au hasard, entier de 0 à 2³² − 1 : choix et transformation de la grille. */
   randomSeed(): number;
+}
+
+/** Réglages de la salle donnés par l'enveloppe. */
+export interface RoomOptions {
+  /** Un jeton d'hôte déjà créé (salle reconstruite par l'enveloppe) ; sinon la salle en crée un. */
+  readonly hostToken?: string;
+  /** L'hôte peut ajouter des bots : en solo seulement (04-Bots §1). */
+  readonly bots?: boolean;
 }
 
 /** Un message à envoyer à la connexion `to`. */
@@ -59,8 +70,10 @@ interface Member {
   color: number;
   /** Rang de 1 à n. Recalculé à chaque changement avant le lancement, figé ensuite. */
   id: number;
-  /** Connexion actuelle ; `null` pour un joueur déconnecté après le lancement. */
+  /** Connexion actuelle ; `null` pour un joueur déconnecté après le lancement, et toujours pour un bot. */
   conn: string | null;
+  /** Difficulté d'un bot joué par l'hôte (04-Bots) ; `null` pour un joueur. Son jeton n'est jamais envoyé. */
+  bot: BotLevel | null;
 }
 
 export class Room {
@@ -68,6 +81,7 @@ export class Room {
   readonly hostToken: string;
   readonly #env: RoomEnv;
   readonly #catalog: Catalog;
+  readonly #botsAllowed: boolean;
   /** L'hôte en premier s'il est présent, puis les autres dans l'ordre d'arrivée. */
   readonly #members: Member[] = [];
   readonly #byConn = new Map<string, Member>();
@@ -75,11 +89,11 @@ export class Room {
   #level: Level = DEFAULT_LEVEL;
   #match: Match | null = null;
 
-  /** `hostToken` : un jeton déjà créé (salle reconstruite par l'enveloppe) ; sinon la salle en crée un. */
-  constructor(env: RoomEnv, catalog: Catalog, hostToken?: string) {
+  constructor(env: RoomEnv, catalog: Catalog, options: RoomOptions = {}) {
     this.#env = env;
     this.#catalog = catalog;
-    this.hostToken = hostToken ?? env.newToken();
+    this.#botsAllowed = options.bots === true;
+    this.hostToken = options.hostToken ?? env.newToken();
   }
 
   /** Un message reçu de la connexion `conn` (déjà décodé du JSON ; `unknown` : il vient d'un client). */
@@ -94,6 +108,12 @@ export class Room {
         return this.#setColor(conn, member, msg.color);
       case "set_level":
         return this.#setLevel(conn, member, msg.level);
+      case "add_bot":
+        return this.#addBot(conn, member);
+      case "set_bot":
+        return this.#setBot(conn, member, msg);
+      case "remove_bot":
+        return this.#removeBot(conn, member, msg.bot);
       case "start":
         return this.#start(conn, member);
       case "restart":
@@ -199,7 +219,7 @@ export class Room {
     if (!asHost && this.#members.length >= MAX_PLAYERS - (hostAbsent ? 1 : 0)) return [error(conn, "game_full")];
 
     const color = pickPlayerColor(msg.color, this.#members.map((m) => m.color));
-    const member: Member = { token: asHost ? this.hostToken : this.#env.newToken(), name, host: asHost, color, id: 0, conn };
+    const member: Member = { token: asHost ? this.hostToken : this.#env.newToken(), name, host: asHost, color, id: 0, conn, bot: null };
     if (asHost) this.#members.unshift(member);
     else this.#members.push(member);
     this.#byConn.set(conn, member);
@@ -242,6 +262,53 @@ export class Room {
     return this.#broadcastRoom();
   }
 
+  /**
+   * Un bot de plus (04-Bots §1), si l'enveloppe les permet (solo) : « Bot n » au plus petit n libre, première
+   * couleur libre, Normal (provisoire).
+   */
+  #addBot(conn: string, member: Member): Outgoing[] {
+    if (!this.#botsAllowed) return [error(conn, "no_bots")];
+    if (!member.host) return [error(conn, "not_host")];
+    if (this.#state === "started") return [error(conn, "game_started")];
+    if (this.#members.length >= MAX_PLAYERS) return [error(conn, "game_full")];
+    const names = new Set(this.#members.map((m) => m.name));
+    let n = 1;
+    while (names.has(`Bot ${n}`)) n++;
+    const color = pickPlayerColor(undefined, this.#members.map((m) => m.color));
+    this.#members.push({ token: this.#env.newToken(), name: `Bot ${n}`, host: false, color, id: 0, conn: null, bot: DEFAULT_BOT_LEVEL });
+    this.#renumber();
+    return this.#broadcastRoom();
+  }
+
+  #findBot(id: unknown): Member | undefined {
+    return this.#members.find((m) => m.bot !== null && m.id === id);
+  }
+
+  #setBot(conn: string, member: Member, msg: Extract<ClientMessage, { type: "set_bot" }>): Outgoing[] {
+    if (!member.host) return [error(conn, "not_host")];
+    if (this.#state === "started") return [error(conn, "game_started")];
+    const bot = this.#findBot(msg.bot);
+    if (bot === undefined) return [error(conn, "unknown_bot")];
+    if (msg.color !== undefined) {
+      if (!isPlayerColor(msg.color)) return [error(conn, "invalid_color")];
+      if (this.#members.some((m) => m !== bot && m.color === msg.color)) return [error(conn, "color_taken")];
+    }
+    if (msg.level !== undefined && !isBotLevel(msg.level)) return [error(conn, "invalid_bot_level")];
+    if (msg.color !== undefined) bot.color = msg.color;
+    if (msg.level !== undefined) bot.bot = msg.level;
+    return this.#broadcastRoom();
+  }
+
+  #removeBot(conn: string, member: Member, id: number): Outgoing[] {
+    if (!member.host) return [error(conn, "not_host")];
+    if (this.#state === "started") return [error(conn, "game_started")];
+    const bot = this.#findBot(id);
+    if (bot === undefined) return [error(conn, "unknown_bot")];
+    this.#members.splice(this.#members.indexOf(bot), 1);
+    this.#renumber();
+    return this.#broadcastRoom();
+  }
+
   #start(conn: string, member: Member): Outgoing[] {
     if (!member.host) return [error(conn, "not_host")];
     if (this.#state === "started") return [error(conn, "game_started")];
@@ -251,14 +318,14 @@ export class Room {
   }
 
   /**
-   * Partie finie, à la demande de l'hôte : une nouvelle grille du même niveau, avec les joueurs connectés.
-   * Provisoire : un joueur déconnecté à ce moment quitte la partie, et son jeton n'est plus valable.
+   * Partie finie, à la demande de l'hôte : une nouvelle grille du même niveau, avec les joueurs connectés et
+   * les bots. Provisoire : un joueur déconnecté à ce moment quitte la partie, et son jeton n'est plus valable.
    */
   #restart(conn: string, member: Member): Outgoing[] {
     if (!member.host) return [error(conn, "not_host")];
     if (this.#match === null || !this.#match.ended) return [error(conn, "not_ended")];
     for (const m of this.#members.slice()) {
-      if (m.conn === null) this.#members.splice(this.#members.indexOf(m), 1);
+      if (m.conn === null && m.bot === null) this.#members.splice(this.#members.indexOf(m), 1);
     }
     return this.#launch();
   }
@@ -266,7 +333,8 @@ export class Room {
   /** Tire une grille, crée la partie, et envoie `start` puis `state` à chaque joueur connecté. */
   #launch(): Outgoing[] {
     const grid = pickGrid(this.#catalog, this.#level, this.#env.randomSeed());
-    const match = new Match(grid.puzzle, grid.solution, this.#members.map((m) => m.id));
+    const players = this.#members.map((m) => ({ id: m.id, bot: m.bot }));
+    const match = new Match(grid.puzzle, grid.solution, players, this.#env.randomSeed());
     this.#match = match;
     const out: Outgoing[] = [];
     for (const m of this.#members) {
@@ -295,7 +363,7 @@ export class Room {
 
   /** L'état de la salle à chaque joueur connecté, avec son propre `you`. */
   #broadcastRoom(): Outgoing[] {
-    const players: RoomPlayer[] = this.#members.map((m) => ({ id: m.id, name: m.name, host: m.host, color: m.color }));
+    const players: RoomPlayer[] = this.#members.map((m) => ({ id: m.id, name: m.name, host: m.host, color: m.color, bot: m.bot }));
     const out: Outgoing[] = [];
     for (const m of this.#members) {
       if (m.conn === null) continue;
@@ -336,6 +404,19 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
       return { type: "set_color", color: m.color as number };
     case "set_level":
       return { type: "set_level", level: m.level as Level };
+    case "add_bot":
+      return { type: "add_bot" };
+    case "set_bot":
+      if (!isCount(m.bot, 1, MAX_PLAYERS)) return null;
+      return {
+        type: "set_bot",
+        bot: m.bot,
+        ...(m.color !== undefined ? { color: m.color as number } : {}),
+        ...(m.level !== undefined ? { level: m.level as BotLevel } : {}),
+      };
+    case "remove_bot":
+      if (!isCount(m.bot, 1, MAX_PLAYERS)) return null;
+      return { type: "remove_bot", bot: m.bot };
     case "start":
       return { type: "start" };
     case "restart":

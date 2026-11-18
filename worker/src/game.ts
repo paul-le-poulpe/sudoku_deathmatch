@@ -54,7 +54,7 @@ export class Game extends DurableObject<Env> {
       const stored = await ctx.storage.get<StoredGame>("game");
       if (stored !== undefined) {
         this.#stored = stored;
-        this.#room = new Room(roomEnv, GRIDS, stored.hostToken);
+        this.#room = new Room(roomEnv, GRIDS, { hostToken: stored.hostToken });
       }
     });
   }
