@@ -60,10 +60,36 @@ export const MINE_DAMAGE = 2;
 export const MINE_REST_TICKS = 400;
 
 /**
+ * Bouclier (03-Pieges §4) : un joueur a au plus un bouclier par SHIELD_CELLS cases remplies (décidé : le
+ * n-ième à 5 n cases). Quand son poseur est à moins de SHIELD_ZONE du centre de sa case (1,5 case,
+ * décidé), une bulle de rayon BUBBLE_RADIUS (provisoire) l'entoure et arrête les boules qui la touchent.
+ */
+export const SHIELD_CELLS = 5;
+export const SHIELD_ZONE = 1500;
+export const BUBBLE_RADIUS = 400;
+/** Distance entre les centres d'une boule et d'un bonhomme protégé en dessous de laquelle la bulle l'arrête. */
+export const BUBBLE_CONTACT = BUBBLE_RADIUS + BALL_RADIUS;
+/**
+ * Charge d'un bouclier (décidé) : 5 unités, une par boule arrêtée ; elle remonte en continu, de vide à
+ * pleine en 30 s, donc une unité toutes les 6 s (120 ticks). Comptée en ticks de recharge : pleine =
+ * SHIELD_UNITS × SHIELD_UNIT_TICKS. Une boule n'est arrêtée que s'il reste au moins une unité (provisoire).
+ */
+export const SHIELD_UNITS = 5;
+export const SHIELD_UNIT_TICKS = 120;
+export const SHIELD_FULL_TICKS = SHIELD_UNITS * SHIELD_UNIT_TICKS;
+
+/**
  * Contrôle de l'hôte (01-Architecture §3, Pièges et projectiles) : il compte lui-même un contact quand les
- * centres sont à moins de BALL_CONTACT − HIT_CONTROL_MARGIN, même si le client ne l'a pas signalé.
+ * centres sont à moins de BALL_CONTACT − HIT_CONTROL_MARGIN, même si le client ne l'a pas signalé ; de même
+ * pour la bulle, à BUBBLE_CONTACT − HIT_CONTROL_MARGIN.
  */
 export const HIT_CONTROL_MARGIN = 300;
+/**
+ * Une boule arrêtée par la bulle, signalée par le client (`block`), profite à celui qui la signale : l'hôte
+ * vérifie qu'elle était possible, avec cette marge sur sa propre position du bonhomme (sur la zone du
+ * bouclier et sur le contact avec la bulle). Provisoire.
+ */
+export const BLOCK_CHECK_MARGIN = 300;
 
 /** Positions de départ, dans l'ordre des joueurs : les quatre coins. Provisoire. */
 export const SPAWNS: readonly (readonly [number, number])[] = [

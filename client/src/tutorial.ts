@@ -1,9 +1,11 @@
-// Tutoriel de l'accueil : une fenêtre modale (`<dialog id="tutorial">`) en cinq étapes, peu de mots,
-// surtout des images, d'après la maquette « Sudoku Deathmatch — tutoriel ». Les images reprennent les
-// dessins du jeu (cases, bonhomme, mine, tourelle, bandeau des PV) en HTML et CSS (style.css, .tuto-*).
-// Rien ici ne vient d'un joueur : le contenu est fixe, d'où l'usage de `innerHTML`.
+// Tutoriel de l'accueil : une fenêtre modale (`<dialog id="tutorial">`) en sept étapes, peu de mots,
+// surtout des images, d'après la maquette « Sudoku Deathmatch — tutoriel » (et, pour le bouclier et le coût
+// des pièges, la maquette « Sudoku Deathmatch — bouclier »). Les images reprennent les dessins du jeu
+// (cases, bonhomme, mine, tourelle, bouclier, bandeau des PV, boutons des pièges) en HTML et CSS
+// (style.css, .tuto-* et .trap-*). Rien ici ne vient d'un joueur : le contenu est fixe, d'où l'usage de
+// `innerHTML`.
 
-import { playerColor } from "./colors.ts";
+import { playerColor, rgba } from "./colors.ts";
 
 const BLUE = playerColor(0);
 const RED = playerColor(1);
@@ -14,6 +16,18 @@ function cell(bg: string, inner = "", extra = ""): string {
 
 function digit(d: number, opts: { color?: string; weight?: number } = {}): string {
   return `<span class="tuto-digit" style="color:${opts.color ?? "var(--ink)"};font-weight:${opts.weight ?? 700}">${d}</span>`;
+}
+
+/**
+ * La case `center` (une case de 112 px) au milieu de ses 8 voisines, pour qu'on la voie dans une grille de
+ * Sudoku : `around` donne les chiffres donnés des voisines, ligne par ligne sans la case du milieu (`null` :
+ * case vide). Deux traits épais font de la case du milieu le coin bas-droit d'un carré de 3 × 3. Le tout est
+ * réduit à 216 px, et les bords s'effacent : la grille continue au-delà.
+ */
+function inGrid(center: string, around: readonly (number | null)[]): string {
+  const cells = around.map((d) => (d === null ? cell("#FFFFFF") : cell("#F5F5F4", digit(d, { weight: 600 }))));
+  cells.splice(4, 0, center);
+  return `<div class="tuto-grid"><div class="tuto-grid-in">${cells.join("")}<span class="tuto-grid-v"></span><span class="tuto-grid-h"></span></div></div>`;
 }
 
 function avatar(color: string, top = 18): string {
@@ -46,8 +60,57 @@ function pv(before: string, after: string, delta = ""): string {
   return `<div class="tuto-row tuto-pv">${before}${SMALL_ARROW}${after}<span class="tuto-delta">${delta}</span></div>`;
 }
 
-function trapButton(kind: "mine" | "turret", label: string, keyLabel: string): string {
-  return `<span class="trap tuto-trap"><span class="trap-icon trap-icon-${kind}" style="--c:${BLUE.color}"></span><span class="trap-label">${label}</span><span class="trap-key">${keyLabel}</span></span>`;
+/**
+ * Bouton d'un piège, comme dans le jeu (screen.ts) : `done` cases remplies sur les `per` qu'il demande (0 :
+ * la mine, toujours disponible) ; le fond se remplit d'une part par case, sans séparateur, plein quand le
+ * piège est prêt.
+ */
+function trapButton(kind: "mine" | "turret" | "shield", label: string, keyLabel: string, done = 0, per = 0): string {
+  const ready = per === 0 || done >= per;
+  const pct = ready ? 100 : (done * 100) / per;
+  const vars = `--c:${BLUE.color};--tint:${BLUE.tint};--ink2:${BLUE.ink}`;
+  return `<span class="trap tuto-trap ${ready ? "ready" : "unearned"}" style="${vars}"><span class="trap-fill" style="width:${pct}%"></span><span class="trap-icon trap-icon-${kind}"></span><span class="trap-label">${label}</span><span class="trap-key">${keyLabel}</span></span>`;
+}
+
+/** Badge du bouclier (scene.ts, BADGE_PATH), réduit à 90 %, trait de 3 px à l'échelle du jeu (6 px ici). */
+const BADGE_PATH = "M28 6C34 9.5 40 10.5 47 10V27C47 40 38 47 28 51C18 47 9 40 9 27V10C16 10.5 22 9.5 28 6Z";
+
+function badge(color: string): string {
+  return `<svg class="tuto-badge" width="112" height="112" viewBox="0 0 56 56" aria-hidden="true"><path d="${BADGE_PATH}" transform="translate(28 28.5) scale(0.9) translate(-28 -28.5)" fill="none" stroke="${color}" stroke-width="3.33" stroke-linejoin="round"/></svg>`;
+}
+
+/**
+ * Jauge du bouclier, deux fois celle du jeu : 5 unités de 16 px et 4 interstices de 4 px ; une unité
+ * entamée se remplit sur ses 16 px.
+ */
+function gauge(charge: number): string {
+  const seg = 16;
+  const gap = 4;
+  const h = 5 * seg + 4 * gap;
+  const whole = Math.floor(charge);
+  const fill = charge >= 5 ? h : whole * (seg + gap) + (charge - whole) * seg;
+  let seps = "";
+  for (let k = 1; k < 5; k++) seps += `<span class="sep" style="top:${h - k * (seg + gap)}px"></span>`;
+  return `<span class="tuto-gauge" style="--c:${BLUE.color};--tint:${BLUE.tint};background:${rgba(BLUE.color, 0.2)}"><span class="fill" style="height:${fill}px"></span>${seps}</span>`;
+}
+
+function shieldCell(charge: number, d = 4): string {
+  return cell(BLUE.tint, badge(BLUE.color) + gauge(charge) + digit(d));
+}
+
+/** Bulle en anneau autour du bonhomme dessiné par `avatar(…, 18)` : rayon 0,4 case, anneau de 6 px à 40 %. */
+function bubble(color: string): string {
+  return `<span class="tuto-bubble" style="background:${rgba(color, 0.08)};box-shadow:inset 0 0 0 6px ${rgba(color, 0.4)}"></span>`;
+}
+
+/** Éclats de la boule arrêtée par la bulle, autour de (x, y). */
+function sparks(x: number, y: number, color: string): string {
+  let out = "";
+  for (let k = 0; k < 6; k++) {
+    const a = (k * Math.PI) / 3 + 0.3;
+    out += `<span class="tuto-spark" style="left:${(x + Math.cos(a) * 26 - 4).toFixed(1)}px;top:${(y + Math.sin(a) * 26 - 4).toFixed(1)}px;width:8px;height:8px;background:${color}"></span>`;
+  }
+  return out;
 }
 
 /** Étoile à `n` branches autour de (cx, cy), rayons extérieur `ro` et intérieur `ri`. */
@@ -74,6 +137,13 @@ function explosion(): string {
   return burst + sparks;
 }
 
+/**
+ * Voisines des cases des étapes 1 (le 7 juste) et 2 (le 5 faux) : aucun chiffre en double sur une ligne,
+ * une colonne ou un carré, ni avec celui de la case du milieu.
+ */
+const AROUND_FILL = [3, null, 5, 8, 1, null, 6, 2] as const;
+const AROUND_WRONG = [9, 2, null, null, 4, 1, null, 8] as const;
+
 interface Step {
   readonly title: string;
   readonly text: string;
@@ -88,7 +158,7 @@ const STEPS: readonly Step[] = [
     text: "Sur une case vide, tapez son chiffre. Juste : la case est à vous, et vos PV remontent au maximum.",
     gap: 104,
     html: () =>
-      `<div class="tuto-row">${cell("#FFFFFF", `<span class="tuto-frame" style="--c:${BLUE.color}"></span>${avatar(BLUE.color)}`)}${key("7")}${ARROW}${cell(BLUE.tint, digit(7))}</div>` +
+      `<div class="tuto-row">${inGrid(cell("#FFFFFF", `<span class="tuto-frame" style="--c:${BLUE.color}"></span>${avatar(BLUE.color)}`), AROUND_FILL)}${key("7")}${ARROW}${inGrid(cell(BLUE.tint, digit(7)), AROUND_FILL)}</div>` +
       pv(slot("Paul", 1), slot("Paul", 4)),
   },
   {
@@ -96,18 +166,19 @@ const STEPS: readonly Step[] = [
     text: "Un chiffre faux ne vous laisse qu’un PV. S’il ne vous en restait qu’un, vous êtes éliminé.",
     gap: 56,
     html: () =>
-      `<div class="tuto-row">${cell("#FECACA", digit(5, { color: "#78716C", weight: 500 }))}<span class="tuto-refused"><svg width="28" height="28" viewBox="0 0 28 28"><path d="M6 6 L22 22 M22 6 L6 22" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" fill="none"/></svg></span></div>` +
+      `<div class="tuto-row">${inGrid(cell("#FECACA", digit(5, { color: "#78716C", weight: 500 })), AROUND_WRONG)}<span class="tuto-refused"><svg width="28" height="28" viewBox="0 0 28 28"><path d="M6 6 L22 22 M22 6 L6 22" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" fill="none"/></svg></span></div>` +
       pv(slot("Maxime", 4), slot("Maxime", 1)) +
       pv(slot("Philémon", 1), slot("Philémon", 0, true)),
   },
   {
-    title: "Piégez vos cases",
-    text: "Sur une case que vous avez remplie, posez une mine (A) ou une tourelle (E).",
+    title: "Améliorez vos cases",
+    text: "Sur une case que vous avez remplie, posez une mine (A), une tourelle (E) ou un bouclier (R).",
     gap: 0,
     html: () =>
       `<div class="tuto-row tuto-row-wide">${cell(BLUE.tint, digit(7))}<div class="tuto-col">` +
       `<div class="tuto-row">${trapButton("mine", "Mine", "A")}${ARROW}${cell(BLUE.tint, mine(BLUE.color) + digit(7))}</div>` +
       `<div class="tuto-row">${trapButton("turret", "Tourelle", "E")}${ARROW}${cell(BLUE.tint, turret(BLUE.color) + digit(7))}</div>` +
+      `<div class="tuto-row">${trapButton("shield", "Bouclier", "R")}${ARROW}${shieldCell(5, 7)}</div>` +
       `</div></div>`,
   },
   {
@@ -122,7 +193,7 @@ const STEPS: readonly Step[] = [
   },
   {
     title: "La tourelle",
-    text: "Toutes les 6 s, elle tire sur l’adversaire le plus proche : 1 PV. Un cercle annonce le tir : esquivez.",
+    text: "Elle tire sur l’adversaire le plus proche et lui retire un PV.",
     gap: 64,
     html: () =>
       `<div class="tuto-strip">${cell(RED.tint, turret(RED.color, 90) + digit(8))}${cell("#FFFFFF")}${cell("#FFFFFF")}${cell("#FFFFFF", avatar(BLUE.color))}` +
@@ -130,6 +201,32 @@ const STEPS: readonly Step[] = [
       `<span class="tuto-ball" style="--c:${RED.color};left:166px;top:44px;width:22px;height:22px;opacity:0.4"></span>` +
       `<span class="tuto-ball tuto-ball-main" style="--c:${RED.color};left:198px;top:39px;width:34px;height:34px"></span></div>` +
       pv(slot("Meimei", 4), slot("Meimei", 3), "−1"),
+  },
+  {
+    title: "Le bouclier",
+    text: "Il vous protège, mais doit se recharger.",
+    // Le cercle de la zone dépasse de 112 px au-dessus et au-dessous de la bande de cases.
+    gap: 130,
+    html: () =>
+      `<div class="tuto-strip">${shieldCell(5)}${cell("#FFFFFF", bubble(BLUE.color) + avatar(BLUE.color))}${cell("#FFFFFF")}${cell(RED.tint, turret(RED.color, -90) + digit(8))}` +
+      `<span class="tuto-zone" style="border-color:${rgba(BLUE.color, 0.55)}"></span>` +
+      `<span class="tuto-ball" style="--c:${RED.color};left:290px;top:47px;width:18px;height:18px;opacity:0.2"></span>` +
+      `<span class="tuto-ball" style="--c:${RED.color};left:250px;top:45px;width:22px;height:22px;opacity:0.4"></span>` +
+      sparks(213, 58, RED.color) +
+      `</div>` +
+      `<div class="tuto-row">${shieldCell(5)}${ARROW}${shieldCell(4)}<span class="tuto-tag">1 boule arrêtée :<br>un cran de moins</span></div>`,
+  },
+  {
+    title: "Le coût des pièges",
+    // Retours à la ligne : `.tuto-desc` est en `white-space: pre-line`.
+    text: "Mine : gratuite.\nTourelle : 3 cases remplies.\nBouclier : 5 cases remplies.\n\nLe bouton se remplit pour chaque case trouvée.\nBouton plein : le piège est prêt.",
+    gap: 0,
+    html: () =>
+      `<div class="tuto-col">` +
+      `<div class="tuto-row">${trapButton("mine", "Mine", "A")}<span class="tuto-tag">Gratuite, sur chacune de vos cases</span></div>` +
+      `<div class="tuto-row">${trapButton("turret", "Tourelle", "E", 1, 3)}<div class="tuto-stack">${SMALL_ARROW}<span class="tuto-tag">3 cases remplies</span></div>${trapButton("turret", "Tourelle", "E", 3, 3)}</div>` +
+      `<div class="tuto-row">${trapButton("shield", "Bouclier", "R", 1, 5)}<div class="tuto-stack">${SMALL_ARROW}<span class="tuto-tag">5 cases remplies</span></div>${trapButton("shield", "Bouclier", "R", 5, 5)}</div>` +
+      `</div>`,
   },
 ];
 

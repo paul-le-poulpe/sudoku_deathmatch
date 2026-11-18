@@ -516,7 +516,16 @@ p {
   width: 504px;
 }
 
+/*
+ * Bouton d'un piège (03-Pieges §1, Disponibilité ; variante A ter de la planche « Barre des pièges ») : le
+ * fond (.trap-fill) se remplit de la couleur claire du joueur (--tint), d'une part par case remplie, sans
+ * séparateur. Plein (.ready) : bord de sa couleur (--c).
+ * Pas encore disponible (.unearned) : nom gris, icône à 55 %. Case qui n'accepte pas de piège (.away) : tout
+ * le bouton à 45 %. Le tutoriel reprend ces classes.
+ */
 .trap {
+  position: relative;
+  overflow: hidden;
   min-height: 52px;
   display: flex;
   align-items: center;
@@ -530,21 +539,57 @@ p {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.3s;
 }
 
 .trap:disabled {
-  opacity: 0.45;
   cursor: not-allowed;
 }
 
+.trap.away {
+  opacity: 0.45;
+}
+
+.trap.ready {
+  border-color: var(--c);
+}
+
+.trap-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: var(--tint);
+  transition: width 0.3s ease-out;
+}
+
 .trap-label {
+  position: relative;
   flex: 1 1 auto;
   text-align: left;
+}
+
+.trap.unearned .trap-label {
+  color: var(--muted);
+}
+
+.trap.unearned .trap-icon {
+  opacity: 0.55;
+}
+
+/* Plusieurs pièges disponibles : « ×2 » après le nom. */
+.trap-count {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink2);
 }
 
 /* Dessin d'une touche : sur les boutons des pièges, et dans l'encadré des commandes. */
 .trap-key,
 .keycap {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -599,6 +644,16 @@ p {
   height: 6px;
   background: var(--c);
   border-radius: 1px;
+}
+
+/* Bouclier : le badge de scene.ts (BADGE_PATH), trait de 2 px, découpé dans la couleur du joueur. */
+.trap-icon-shield::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--c);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'%3E%3Cpath d='M28 6C34 9.5 40 10.5 47 10V27C47 40 38 47 28 51C18 47 9 40 9 27V10C16 10.5 22 9.5 28 6Z' fill='none' stroke='black' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'%3E%3Cpath d='M28 6C34 9.5 40 10.5 47 10V27C47 40 38 47 28 51C18 47 9 40 9 27V10C16 10.5 22 9.5 28 6Z' fill='none' stroke='black' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .game-message {
@@ -839,11 +894,13 @@ p {
   font-weight: 700;
 }
 
+/* `pre-line` : un `\n` du texte d'une étape (tutorial.ts) est un retour à la ligne. */
 .tuto-desc {
   margin: 0;
   font-size: 17px;
   line-height: 1.5;
   color: #44403c;
+  white-space: pre-line;
 }
 
 .tuto-dots {
@@ -911,6 +968,55 @@ p {
   height: 112px;
   border-radius: 6px;
   box-shadow: 0 0 0 1px var(--border);
+}
+
+/*
+ * Case au milieu de ses voisines (tutorial.ts, inGrid) : 3 × 3 cases de 112 px réduites à 216 px, bords
+ * effacés ; deux traits épais (6 px, 3 px du jeu à cette échelle) à droite et sous la case du milieu.
+ */
+.tuto-grid {
+  position: relative;
+  flex: none;
+  width: 216px;
+  height: 216px;
+  -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+}
+
+.tuto-grid-in {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 336px;
+  height: 336px;
+  display: grid;
+  grid-template-columns: repeat(3, 112px);
+  transform: scale(0.643);
+  transform-origin: 0 0;
+}
+
+.tuto-grid-in .tuto-cell {
+  border-radius: 0;
+}
+
+.tuto-grid-v,
+.tuto-grid-h {
+  position: absolute;
+  background: var(--ink);
+}
+
+.tuto-grid-v {
+  left: 221px;
+  top: 0;
+  width: 6px;
+  height: 336px;
+}
+
+.tuto-grid-h {
+  left: 0;
+  top: 221px;
+  width: 336px;
+  height: 6px;
 }
 
 .tuto-digit {
@@ -1167,6 +1273,62 @@ p {
 .tuto-ball-main {
   border: 4px solid #ffffff;
   box-shadow: 0 2px 6px rgba(28, 25, 23, 0.4);
+}
+
+/* Bouclier, deux fois le dessin du jeu (scene.ts) : badge, jauge (fond en ligne, `--c`, `--tint`), bulle, zone. */
+.tuto-badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.tuto-gauge {
+  position: absolute;
+  left: 98px;
+  top: 8px;
+  width: 10px;
+  height: 96px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tuto-gauge .fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: var(--c);
+}
+
+.tuto-gauge .sep {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--tint);
+}
+
+/* Bulle centrée sur le bonhomme de `avatar(…, 18)` : rayon de 45 px (0,4 case). */
+.tuto-bubble {
+  position: absolute;
+  left: 11px;
+  top: 13px;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+}
+
+/* Cercle de la zone autour de la première case de la bande : rayon de 1,5 case (168 px), trait de 4 px centré. */
+.tuto-zone {
+  position: absolute;
+  left: -114px;
+  top: -114px;
+  width: 340px;
+  height: 340px;
+  box-sizing: border-box;
+  border: 4px solid;
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 /* Case du bandeau des PV : nom et 4 pastilles, comme le bandeau du jeu. */

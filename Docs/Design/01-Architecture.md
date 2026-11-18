@@ -316,11 +316,32 @@ Deux cas :
   le bonhomme touché : il ne retire des PV qu'à celui qui l'envoie. Si un
   contact a un jour d'autres effets (des points pour le poseur, un projectile
   qui disparaît), l'hôte devra vérifier que le contact était possible.
+- **Bulle du bouclier** (`03-Pieges.md` §4, implémenté le 18 novembre 2026).
+  Le client teste aussi le contact entre une boule et la bulle de son
+  bonhomme, à la position où il le dessine, s'il est protégé (`activeShield`
+  de `packages/engine/src/shield.ts`, avec la charge qu'il connaît) : la boule
+  disparaît de son écran, il envoie `block {ball}` et retire tout de suite une
+  unité de charge. Ce signalement **profite** à celui qui l'envoie : l'hôte le
+  vérifie (`applyBlock`), avec `BLOCK_CHECK_MARGIN` (0,3 case, provisoire) sur
+  sa propre position du bonhomme : un de ses boucliers chargé à moins de
+  1,5 case + la marge, et la boule à moins de `BUBBLE_CONTACT` + la marge.
+  Refusé, rien n'est envoyé et la boule continue chez l'hôte. Le contrôle de
+  l'hôte arrête lui-même une boule à `BUBBLE_CONTACT − HIT_CONTROL_MARGIN`
+  d'un bonhomme protégé, avant de chercher un contact avec le bonhomme.
+  L'hôte annonce chaque boule arrêtée à tous (`blocked` : boule, joueur, case
+  du bouclier, `full`).
+- **Charge du bouclier** : un seul nombre, `full`, le tick où il sera plein ;
+  la charge à un tick s'en déduit (`shieldCharge`). Il est envoyé à la pose
+  (le tick de `placed`), à chaque `blocked` et dans `state` ; chaque client
+  calcule jauge et bulle au tick de l'hôte où il dessine les pièges, sans
+  message de plus. Les bulles des autres bonshommes sont calculées sur leur
+  position affichée, interpolée dans le passé : elles peuvent apparaître un
+  peu tôt ou un peu tard.
 - **Délai d'avertissement.** Un danger créé par l'hôte au tick T arrive chez
   le client un trajet aller plus tard, alors que la prédiction du client a
   déjà un trajet aller d'avance : le client l'apprend environ un ping trop
   tard pour son propre écran. Un danger visible ne doit donc pas pouvoir
-  toucher avant un délai plus long que le ping (`03-Pieges.md` §4). Un client
+  toucher avant un délai plus long que le ping (`03-Pieges.md` §5). Un client
   qui apprend un danger trop tard ne teste pas le contact déjà passé
   (provisoire) ; le contrôle de l'hôte s'applique.
 - **La tourelle fixe sa direction au départ de la boule** (`03-Pieges.md` §3,
@@ -335,7 +356,7 @@ Deux cas :
   il est décoratif et ne donne jamais la direction du tir.
 - **Danger qui disparaît en touchant** : chaque client apprend en retard qu'un
   autre bonhomme l'a pris. Deux joueurs peuvent alors chacun le voir toucher
-  leur propre bonhomme (`03-Pieges.md` §4).
+  leur propre bonhomme (`03-Pieges.md` §5).
 
 **Mines.** Décidé par l'auteur le 16 novembre 2026 (`03-Pieges.md` §2) : la mine
 est toujours visible par tous ; à la pose, un grand cadre se resserre sur la
@@ -515,7 +536,7 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
 
 À décider avec l'auteur : les points ouverts de `00-Game.md` §3, de
 `02-Grilles.md` §4 (niveaux de difficulté, taille du catalogue) et de
-`03-Pieges.md` §4.
+`03-Pieges.md` §5.
 
 État :
 
@@ -576,6 +597,18 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
    `state` est retiré). Vérifié : typecheck, build du client et du Worker.
    Pas vérifié : une partie jouée. Le tutoriel ne parle d'aucune des deux
    règles.
+10. **Fait (18 novembre 2026) : bouclier, disponibilité des pièges, boules du
+    joueur, tutoriel** (`03-Pieges.md` §1, §3, §4 ; `00-Game.md` §1,
+    Tutoriel). Moteur : `shield.ts` (`shieldCharge`, `spendShield`,
+    `activeShield`), constantes `SHIELD_*`, `BUBBLE_*`, `BLOCK_CHECK_MARGIN`
+    (`config.ts`), `TRAP_CELLS`, `applyBlock` et bulle dans `controlBalls`
+    (`game.ts`). Réseau : piège `shield`, message client `block`, événement
+    `blocked`, `full` en cinquième élément de chaque piège de `state`. Client :
+    jauge, badge, cercle de la zone, bulle, boules du joueur à 15 % (`scene.ts`),
+    touche R, barre des pièges (`screen.ts`), deux étapes du tutoriel.
+    Vérifié : typecheck, build du client, absence du catalogue en ligne dans
+    `client/dist`. Pas vérifié : une partie jouée, l'affichage dans un
+    navigateur.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -624,18 +657,26 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   l'hôte compte lui-même un contact sous 0,05 case (marge de 0,3 case). Une
   boule ne touche qu'une fois : elle disparaît.
 - **Ordre d'un tick de l'hôte** : déplacements, remplissages, poses, contacts
-  signalés, départs puis apparitions des boules, contrôle des boules, mines,
-  fin de partie.
-- **Limites par tick et par joueur** : 2 poses, 4 contacts signalés (comme les
-  4 remplissages).
+  signalés, boules arrêtées signalées, départs puis apparitions des boules,
+  contrôle des boules, mines, fin de partie.
+- **Limites par tick et par joueur** : 2 poses, 4 contacts signalés, `hit` et
+  `block` ensemble (comme les 4 remplissages).
 - **Canon** : dessiné vers le bonhomme adverse le plus proche tel que ce client
   l'affiche, et dans la direction de la boule pendant les 6 ticks qui suivent
   son départ.
-- **Barre des pièges** : boutons grisés quand la case sous le bonhomme n'est
-  pas à lui ou a déjà un piège, et celui de la tourelle quand une de plus
-  dépasserait le tiers de ses cases (les poses en attente de réponse ne
-  comptent pas : l'hôte refuse l'excédent) ; relus toutes les 150 ms ; un clic
-  ne prend pas le focus du clavier.
+- **Barre des pièges** (`screen.ts`, `PlaySession.trapProgress`) : boutons à
+  45 % (`.away`) quand la case sous le bonhomme n'est pas à lui ou a déjà un
+  piège ; pour la tourelle et le bouclier, fond rempli d'une part par case
+  (`.trap-fill`, sans séparateur), plein quand un de plus tient dans ses cases
+  (`TRAP_CELLS` du moteur ; les poses en attente de réponse ne comptent pas :
+  l'hôte refuse l'excédent) ; relus toutes les 150 ms, le DOM ne change que si
+  l'état change ; un clic ne prend pas le focus du clavier. Le tutoriel
+  reprend les mêmes classes.
+- **Dessin du bouclier** (`scene.ts`) : badge dessiné une fois par couleur dans
+  un canvas 2D (`Path2D` du chemin de la maquette), ajouté comme texture : les
+  Graphics de Phaser ne suivent pas ses courbes. Jauge, cercle de la zone et
+  bulle sont des Graphics. Les chiffres ont un contour de 4 px de la couleur
+  du fond de leur case (`setStroke`), qui coupe le cercle de la zone.
 - **Dessin de la mine** (`scene.ts`, `PlaySession.hazards`) : la session donne
   pour chaque mine sa phase (`MineLook` : cadre de la pose, recharge, rebond),
   Phaser la dessine. Cadre à pointes : carré de 32 px au centre de la case,

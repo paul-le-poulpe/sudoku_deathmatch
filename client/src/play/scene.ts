@@ -6,12 +6,21 @@
 // Dessins des pièges (maquette « Sudoku Deathmatch — pièges », 03-Pieges §2 et §3) : mine en « cadre à
 // pointes », toujours visible, posée avec un grand cadre qui se resserre sur la case ; tourelle en anneau
 // avec un canon carré, et un cercle qui se resserre la seconde avant le tir (planche « Nouvelles mines et
-// tourelles »).
+// tourelles »). Bouclier (maquette « Sudoku Deathmatch — bouclier », 03-Pieges §4) : contour « badge »,
+// jauge de charge à droite, cercle de sa zone pour son poseur, bulle en anneau autour du bonhomme protégé.
 
-import { BALL_RADIUS, CATCH_UP_HP, GRID, START_HP } from "@sudoku-deathmatch/engine";
+import {
+  BALL_RADIUS,
+  BUBBLE_RADIUS,
+  CATCH_UP_HP,
+  GRID,
+  SHIELD_UNITS,
+  SHIELD_ZONE,
+  START_HP,
+} from "@sudoku-deathmatch/engine";
 
 import { PLAYER_COLORS, hexToInt, playerColor, type PlayerColor } from "../colors.ts";
-import type { PlaySession, ViewBall, ViewTrap } from "./session.ts";
+import type { PlaySession, ViewBall, ViewBubble, ViewTrap } from "./session.ts";
 
 export const CELL_PX = 56;
 export const BOARD_PX = 9 * CELL_PX;
@@ -46,6 +55,42 @@ const BLAST = "#F59E0B";
 /** Unités du moteur → pixels de la grille. */
 function px(u: number): number {
   return (u / GRID) * BOARD_PX;
+}
+
+/**
+ * Bouclier (planches « Dessins » et « Jauge de charge ») : le badge, dessiné dans une case de 56 px puis
+ * réduit à 90 % autour de (28, 28,5), trait de 3 px à l'écran ; la jauge, barre de 5 × 48 px à 49 px du bord
+ * gauche et 4 px du haut, 5 unités de 8 px séparées par 4 interstices de 2 px de la couleur du fond de la
+ * case, tous sur des pixels entiers (sinon les interstices paraissent inégaux).
+ */
+const BADGE_PATH = "M28 6C34 9.5 40 10.5 47 10V27C47 40 38 47 28 51C18 47 9 40 9 27V10C16 10.5 22 9.5 28 6Z";
+const BADGE_SCALE = 0.9;
+const BADGE_STROKE = 3;
+const GAUGE_X = 49;
+const GAUGE_Y = 4;
+const GAUGE_W = 5;
+const GAUGE_SEG = 8;
+const GAUGE_GAP = 2;
+const GAUGE_H = SHIELD_UNITS * GAUGE_SEG + (SHIELD_UNITS - 1) * GAUGE_GAP;
+/** Cercle de la zone (planche « Zone du bouclier », C) : trait de 2 px à 55 %, fondu de 0,2 s. */
+const ZONE_WIDTH = 2;
+const ZONE_ALPHA = 0.55;
+const ZONE_FADE_MS = 200;
+/**
+ * Contour des chiffres, de la couleur du fond de leur case : il coupe le cercle de la zone autour d'eux
+ * (4 px de trait, donc 2 px autour du chiffre).
+ */
+const DIGIT_HALO = 4;
+/** Bulle : anneau de 3 px à 40 %, fond à 8 %, 90 % au moment d'arrêter une boule ; grossit en 220 ms, rapetisse en 180. */
+const BUBBLE_RING = 3;
+const BUBBLE_IN_MS = 220;
+const BUBBLE_OUT_MS = 180;
+const BUBBLE_FLASH_MS = 220;
+/** Ses propres boules (03-Pieges §3) : 15 % d'opacité, pour se concentrer sur celles des autres. */
+const OWN_BALL_ALPHA = 0.15;
+
+function hexOf(color: number): string {
+  return `#${color.toString(16).padStart(6, "0")}`;
 }
 
 /** Cadre de la mine : carré de 32 px au centre de la case (12 px du bord), trait de 2,5 px vers l'intérieur. */
@@ -131,6 +176,15 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     balls!: Phaser.GameObjects.Graphics;
     /** Cadre de la pose d'une mine : au-dessus de tout. */
     overlay!: Phaser.GameObjects.Graphics;
+    /** Bulles des boucliers : au-dessus des boules, sous les bonshommes. */
+    bubbles!: Phaser.GameObjects.Graphics;
+    /** Badge de chaque bouclier, par case : au-dessus du fond de la grille, sous les chiffres. */
+    readonly badges = new Map<number, Phaser.GameObjects.Image>();
+    /** Opacité du cercle de la zone de chacun de ses boucliers, par case, de 0 à 1. */
+    readonly zoneFade = new Map<number, number>();
+    /** Par joueur : bulle affichée ou non, depuis quand, où, et jusqu'à quand elle s'éclaire. */
+    readonly bubbleLook = new Map<number, { shown: boolean; since: number; x: number; y: number; flash: number }>();
+    lastBoard = -1;
     readonly cellTexts: Phaser.GameObjects.Text[] = [];
     readonly cellCache: string[] = [];
     readonly nameTexts = new Map<number, Phaser.GameObjects.Text>();
@@ -163,10 +217,29 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         g.generateTexture(`avatar-${i}`, 30, 38);
       });
       g.destroy();
+      // Badge du bouclier, une texture par couleur : dessiné par le canvas 2D, qui suit le chemin de la
+      // maquette (courbes, angles arrondis), ce que les Graphics de Phaser ne font pas.
+      const badge = new Path2D(BADGE_PATH);
+      PLAYER_COLORS.forEach((c, i) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = CELL_PX;
+        canvas.height = CELL_PX;
+        const ctx = canvas.getContext("2d");
+        if (ctx === null) return;
+        ctx.translate(28, 28.5);
+        ctx.scale(BADGE_SCALE, BADGE_SCALE);
+        ctx.translate(-28, -28.5);
+        ctx.lineWidth = BADGE_STROKE / BADGE_SCALE;
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = c.color;
+        ctx.stroke(badge);
+        this.textures.addCanvas(`badge-${i}`, canvas);
+      });
 
       this.board = this.add.graphics();
       this.hud = this.add.graphics();
       this.balls = this.add.graphics().setDepth(8);
+      this.bubbles = this.add.graphics().setDepth(9);
       this.overlay = this.add.graphics().setDepth(12);
       for (let i = 0; i < 81; i++) {
         const [cx, cy] = cellCenter(i);
@@ -184,6 +257,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       const hazards = session.hazards(now, view);
       this.drawBoard(now, hazards.traps);
       this.drawBalls(hazards.balls);
+      this.drawBubbles(now, view, hazards.bubbles);
       this.drawHud(now, view);
       this.drawPlayers(view);
       this.playFx();
@@ -218,13 +292,14 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         }
         b.fillStyle(bg, 1);
         b.fillRect((i % 9) * CELL_PX, TOP + Math.floor(i / 9) * CELL_PX, CELL_PX, CELL_PX);
-        const key = `${text}|${ink}|${weight}`;
+        const key = `${text}|${ink}|${weight}|${bg}`;
         if (this.cellCache[i] !== key) {
           this.cellCache[i] = key;
           const t = this.cellTexts[i]!;
           t.setText(text);
           t.setColor(ink);
           t.setFontStyle(weight);
+          t.setStroke(hexOf(bg), DIGIT_HALO);
         }
       }
       b.lineStyle(1, LINE, 1);
@@ -240,9 +315,11 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       }
       b.strokeRect(1.5, TOP + 1.5, BOARD_PX - 3, BOARD_PX - 3);
       for (const t of traps) {
-        if (t.mine === null) this.drawTrap(b, t);
+        if (t.kind === "shield") this.drawShield(b, t);
+        else if (t.mine === null) this.drawTrap(b, t);
         else this.drawMine(b, t);
       }
+      this.drawZones(b, now, traps);
       this.drawMinePoses(traps);
       const mine = session.myCell();
       if (mine >= 0) {
@@ -289,6 +366,91 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     }
 
     /**
+     * Bouclier (03-Pieges §4), vu de la même façon par tous : le badge (une image par case, créée à la
+     * première image où il apparaît) et la jauge de charge, remplie du bas vers le haut ; une unité entamée
+     * se remplit sur ses 8 px, sans l'interstice au-dessus.
+     */
+    drawShield(b: Phaser.GameObjects.Graphics, t: ViewTrap): void {
+      const c = colorOf(t.owner);
+      const color = hexToInt(c.color);
+      const x0 = (t.cell % 9) * CELL_PX;
+      const y0 = TOP + Math.floor(t.cell / 9) * CELL_PX;
+      if (!this.badges.has(t.cell)) {
+        const index = session.players.find((p) => p.id === t.owner)?.color ?? 0;
+        this.badges.set(t.cell, this.add.image(x0 + CELL_PX / 2, y0 + CELL_PX / 2, `badge-${index}`).setDepth(1));
+      }
+      const x = x0 + GAUGE_X;
+      const y = y0 + GAUGE_Y;
+      b.fillStyle(color, 0.2);
+      b.fillRect(x, y, GAUGE_W, GAUGE_H);
+      const charge = Math.max(0, Math.min(SHIELD_UNITS, t.charge));
+      const whole = Math.floor(charge);
+      const h = charge >= SHIELD_UNITS ? GAUGE_H : whole * (GAUGE_SEG + GAUGE_GAP) + (charge - whole) * GAUGE_SEG;
+      b.fillStyle(color, 1);
+      b.fillRect(x, y + GAUGE_H - h, GAUGE_W, h);
+      b.fillStyle(hexToInt(c.tint), 1);
+      for (let k = 1; k < SHIELD_UNITS; k++) b.fillRect(x, y + GAUGE_H - k * (GAUGE_SEG + GAUGE_GAP), GAUGE_W, GAUGE_GAP);
+    }
+
+    /**
+     * Cercle de la zone de chacun de ses boucliers dont son bonhomme est à moins de 3 cases (session.ts,
+     * `zone`) : rayon de 1,5 case, en fondu. Dessiné sous les chiffres, dont le contour le coupe.
+     */
+    drawZones(b: Phaser.GameObjects.Graphics, now: number, traps: readonly ViewTrap[]): void {
+      const dt = this.lastBoard < 0 ? 0 : now - this.lastBoard;
+      this.lastBoard = now;
+      for (const t of traps) {
+        if (t.kind !== "shield") continue;
+        const before = this.zoneFade.get(t.cell) ?? 0;
+        const step = dt / ZONE_FADE_MS;
+        const fade = t.zone ? Math.min(1, before + step) : Math.max(0, before - step);
+        this.zoneFade.set(t.cell, fade);
+        if (fade <= 0) continue;
+        const [cx, cy] = cellCenter(t.cell);
+        b.lineStyle(ZONE_WIDTH, hexToInt(colorOf(t.owner).color), ZONE_ALPHA * fade);
+        b.strokeCircle(cx, cy, px(SHIELD_ZONE));
+      }
+    }
+
+    /**
+     * Bulles (03-Pieges §4), vues par tous : un anneau de la couleur du joueur autour de son bonhomme protégé.
+     * Elle grossit quand il entre dans la zone d'un bouclier chargé, rapetisse quand il en sort ou que la
+     * charge manque, et s'éclaire quand elle arrête une boule.
+     */
+    drawBubbles(now: number, view: readonly ViewPlayer[], bubbles: readonly ViewBubble[]): void {
+      const g = this.bubbles;
+      g.clear();
+      const r = px(BUBBLE_RADIUS);
+      for (const p of view) {
+        const on = bubbles.find((q) => q.player === p.id);
+        let look = this.bubbleLook.get(p.id);
+        if (look === undefined) {
+          look = { shown: false, since: -Infinity, x: p.x, y: p.y, flash: 0 };
+          this.bubbleLook.set(p.id, look);
+        }
+        const shown = on !== undefined && p.alive;
+        if (shown !== look.shown) {
+          look.shown = shown;
+          look.since = now;
+        }
+        if (p.alive) {
+          look.x = p.x;
+          look.y = p.y;
+        }
+        const t = now - look.since;
+        const scale = shown ? easeOutBack(Math.min(1, t / BUBBLE_IN_MS)) : 1 - easeInBack(Math.min(1, t / BUBBLE_OUT_MS));
+        if (scale <= 0.001 || !p.alive) continue;
+        const color = hexToInt(playerColor(p.color).color);
+        const x = px(look.x);
+        const y = TOP + px(look.y) - 5;
+        g.fillStyle(color, 0.08);
+        g.fillCircle(x, y, r * scale);
+        g.lineStyle(BUBBLE_RING, color, now < look.flash ? 0.9 : 0.4);
+        g.strokeCircle(x, y, Math.max(0, r * scale - BUBBLE_RING / 2));
+      }
+    }
+
+    /**
      * Le chiffre reste au centre ; le piège occupe l'espace autour (03-Pieges §1). Tourelle : anneau de
      * 44 px, canon carré de 10 px posé sur l'anneau, vers (ux, uy).
      */
@@ -311,7 +473,10 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
       b.fillTriangle(mx + ax + bx, my + ay + by, mx - ax - bx, my - ay - by, mx - ax + bx, my - ay + by);
     }
 
-    /** Boules : un cercle qui se resserre au centre de la tourelle la seconde avant le tir, puis la boule en vol. */
+    /**
+     * Boules : un cercle qui se resserre au centre de la tourelle la seconde avant le tir, puis la boule en
+     * vol ; celles de ses propres tourelles à 15 % (le cercle d'avant le tir reste opaque).
+     */
     drawBalls(balls: readonly ViewBall[]): void {
       const g = this.balls;
       g.clear();
@@ -327,11 +492,12 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
           g.strokeCircle(x, y, r * (1 + 1.2 * (1 - ball.progress)) - 1);
           continue;
         }
-        g.fillStyle(INK, 0.25);
+        const a = ball.owner === session.you ? OWN_BALL_ALPHA : 1;
+        g.fillStyle(INK, 0.25 * a);
         g.fillCircle(x, y + 1.5, r);
-        g.fillStyle(color, 1);
+        g.fillStyle(color, a);
         g.fillCircle(x, y, r);
-        g.lineStyle(2, 0xffffff, 1);
+        g.lineStyle(2, 0xffffff, a);
         g.strokeCircle(x, y, r - 1);
       }
     }
@@ -497,6 +663,13 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
             this.emitter(color).explode(14, px(fx.x), TOP + px(fx.y));
             if (fx.victim === session.you) this.cameras.main.shake(140, 0.006);
             break;
+          case "blocked": {
+            // La boule éclate sur la bulle, qui s'éclaire un instant ; pas de secousse : rien n'est perdu.
+            this.emitter(color).explode(10, px(fx.x), TOP + px(fx.y));
+            const look = this.bubbleLook.get(fx.victim);
+            if (look !== undefined) look.flash = performance.now() + BUBBLE_FLASH_MS;
+            break;
+          }
         }
       }
     }

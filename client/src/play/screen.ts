@@ -76,25 +76,38 @@ export function startPlay(options: {
     }),
   );
 
-  // Barre des pièges (03-Pieges §1), sous les chiffres. Grisée quand la pose est impossible.
-  const myColor = playerColor(options.start.players.find((p) => p.id === options.start.you)?.color ?? 0).color;
+  // Barre des pièges (03-Pieges §1), sous les chiffres. Le fond d'un bouton se remplit de la couleur claire
+  // du joueur, d'une part par case remplie, sans séparateur (variante A ter de la planche « Barre des
+  // pièges ») : plein, le piège est disponible. Le bouton est grisé quand la case sous le bonhomme n'en
+  // accepte pas.
+  const me = playerColor(options.start.players.find((p) => p.id === options.start.you)?.color ?? 0);
   const trapButtons = (
     [
       ["mine", "Mine", "A", "Poser une mine (touche A, Q en QWERTY)"],
       ["turret", "Tourelle", "E", "Poser une tourelle (touche E)"],
+      ["shield", "Bouclier", "R", "Poser un bouclier (touche R)"],
     ] as const satisfies readonly (readonly [TrapKind, string, string, string])[]
   ).map(([kind, label, key, aria]) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "trap";
     b.setAttribute("aria-label", aria);
+    b.style.setProperty("--c", me.color);
+    b.style.setProperty("--tint", me.tint);
+    b.style.setProperty("--ink2", me.ink);
+    const fill = document.createElement("span");
+    fill.className = "trap-fill";
+    b.append(fill);
     const icon = document.createElement("span");
     icon.className = `trap-icon trap-icon-${kind}`;
-    icon.style.setProperty("--c", myColor);
     icon.setAttribute("aria-hidden", "true");
     const text = document.createElement("span");
     text.className = "trap-label";
     text.textContent = label;
+    const count = document.createElement("span");
+    count.className = "trap-count";
+    count.hidden = true;
+    text.append(count);
     const chip = document.createElement("span");
     chip.className = "trap-key";
     chip.setAttribute("aria-hidden", "true");
@@ -103,7 +116,7 @@ export function startPlay(options: {
     // Le clic ne prend pas le focus : les flèches restent au jeu.
     b.addEventListener("mousedown", (e) => e.preventDefault());
     b.addEventListener("click", () => session.pressTrap(kind, performance.now()));
-    return { kind, button: b };
+    return { kind, aria, button: b, fill, count, look: "" };
   });
   $("game-traps").replaceChildren(...trapButtons.map((t) => t.button));
 
@@ -178,14 +191,26 @@ export function startPlay(options: {
   session.onChange = renderPanel;
 
   // Le message sous la grille s'efface tout seul, et les boutons des pièges suivent la case sous le
-  // bonhomme : relus quelques fois par seconde.
+  // bonhomme et les cases remplies : relus quelques fois par seconde ; le DOM ne change que si l'état change.
   const message = $("game-message");
   const timer = setInterval(() => {
     const now = performance.now();
     message.textContent = now < session.messageUntil ? session.message : "";
-    for (const { kind, button } of trapButtons) {
-      const blocked = !session.canPlace(kind);
-      if (button.disabled !== blocked) button.disabled = blocked;
+    const here = session.canPlaceHere();
+    for (const t of trapButtons) {
+      const { per, done, avail } = session.trapProgress(t.kind);
+      const look = `${here}|${per}|${done}|${avail}`;
+      if (t.look === look) continue;
+      t.look = look;
+      const ready = avail > 0;
+      t.fill.style.width = `${per === 0 || ready ? 100 : (done * 100) / per}%`;
+      t.button.classList.toggle("ready", ready);
+      t.button.classList.toggle("unearned", !ready);
+      t.button.classList.toggle("away", !here);
+      t.button.disabled = !(here && ready);
+      t.count.hidden = avail < 2;
+      t.count.textContent = `×${avail}`;
+      t.button.setAttribute("aria-label", ready ? t.aria : `${t.aria} : ${done} case${done > 1 ? "s" : ""} remplie${done > 1 ? "s" : ""} sur ${per}`);
     }
   }, 150);
 

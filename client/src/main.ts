@@ -34,7 +34,7 @@ function $<T extends HTMLElement = HTMLElement>(id: string): T {
 type Screen = "home" | "create" | "join" | "room" | "game";
 
 const SUBTITLES: Readonly<Record<Screen, string>> = {
-  home: "2 à 4 joueurs, un bonhomme chacun, une grille de Sudoku",
+  home: "2 à 4 joueurs",
   create: "Nouvelle partie",
   join: "Rejoindre une partie",
   room: "Salle d'attente",

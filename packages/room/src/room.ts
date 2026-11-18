@@ -114,6 +114,10 @@ export class Room {
         if (this.#match === null) return [error(conn, "not_started")];
         this.#match.hit(member.id, msg.ball);
         return [];
+      case "block":
+        if (this.#match === null) return [error(conn, "not_started")];
+        this.#match.block(member.id, msg.ball);
+        return [];
     }
   }
 
@@ -351,6 +355,9 @@ function parseClientMessage(raw: unknown): ClientMessage | null {
     case "hit":
       if (!isCount(m.ball, 1, Number.MAX_SAFE_INTEGER)) return null;
       return { type: "hit", ball: m.ball };
+    case "block":
+      if (!isCount(m.ball, 1, Number.MAX_SAFE_INTEGER)) return null;
+      return { type: "block", ball: m.ball };
     default:
       return null;
   }

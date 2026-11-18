@@ -94,13 +94,16 @@ Décidé par l'auteur le 15 novembre 2026.
   2026 ; avant : chiffre dans la couleur du joueur).
 - **Tutoriel** (décidé le 16 novembre 2026, maquette « Sudoku Deathmatch —
   tutoriel », https://claude.ai/artifact/J8HJtARyKi5uGQLh3Xnf1r) : sur l'accueil, un bouton sous le solo ouvre une fenêtre
-  par-dessus la page, sur un fond assombri. Cinq étapes, peu de texte, surtout
-  des images : remplir une case, chiffre faux, poser un piège, la mine, la
-  tourelle. « Jouer », à la dernière étape, ferme la fenêtre ; la croix, un clic
-  sur le fond ou Échap aussi. Textes et images : `client/src/tutorial.ts`. Ses
-  textes et ses images répètent des valeurs des règles (4 PV, 2 PV de la mine,
-  20 s de recharge, une tourelle toutes les 6 s) : quand l'une change, le
-  tutoriel change avec elle.
+  par-dessus la page, sur un fond assombri. Sept étapes, peu de texte, surtout
+  des images : remplir une case, chiffre faux, « Améliorez vos cases » (poser
+  un piège), la mine, la tourelle, le bouclier, le coût des pièges (ajoutées
+  le 18 novembre 2026, à la demande de l'auteur, qui a aussi écrit les textes
+  des étapes 3, 5 et 6). « Jouer », à la dernière étape, ferme la fenêtre ;
+  la croix, un clic sur le fond ou Échap aussi. Textes et images :
+  `client/src/tutorial.ts`. Ses textes et ses images répètent des valeurs des
+  règles (4 PV, 2 PV de la mine, 20 s de recharge, 1 PV par boule, une
+  tourelle pour 3 cases et un bouclier pour 5, 5 unités de charge) : quand
+  l'une change, le tutoriel change avec elle.
 - **Bots.** Il pourra y en avoir à terme, pas avant que les fonctionnalités du
   jeu soient en place.
 
@@ -136,7 +139,7 @@ de ce document font foi.
 
 ## 3. Points ouverts
 
-- **Pièges** : `03-Pieges.md` §4.
+- **Pièges** : `03-Pieges.md` §5.
 - **Couleurs et signaux rouges** : la palette a un rouge, et le chiffre refusé
   clignote en rouge, la mine explose en rouge et orange ; le gris de la case
   d'un joueur « Charbon » ressemble à celui des chiffres donnés.

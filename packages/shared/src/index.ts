@@ -96,8 +96,8 @@ export function cloudflareGamePath(id: string): string {
 
 // ---- pièges (03-Pieges) ----
 
-/** `mine` et `turret` : vues par tous ; la tourelle tire des boules. */
-export const TRAP_KINDS = ["mine", "turret"] as const;
+/** Vus par tous ; la tourelle tire des boules, le bouclier les arrête autour de son poseur. */
+export const TRAP_KINDS = ["mine", "turret", "shield"] as const;
 export type TrapKind = (typeof TRAP_KINDS)[number];
 
 export function isTrapKind(value: unknown): value is TrapKind {
@@ -140,7 +140,12 @@ export type ClientMessage =
    * Partie lancée : sur l'écran du joueur, la boule `ball` a touché son bonhomme (01-Architecture §3,
    * Pièges et projectiles). Ne fait de tort qu'à lui.
    */
-  | { readonly type: "hit"; readonly ball: number };
+  | { readonly type: "hit"; readonly ball: number }
+  /**
+   * Partie lancée : sur l'écran du joueur, la boule `ball` a touché la bulle de son bouclier (03-Pieges §4).
+   * Elle le protège : l'hôte vérifie que c'était possible avant de l'accepter.
+   */
+  | { readonly type: "block"; readonly ball: number };
 
 // ---- hôte → client ----
 
@@ -197,11 +202,14 @@ export type GameEvent =
   | { readonly type: "hp_max"; readonly player: number; readonly hpMax: number; readonly hp: number }
   | { readonly type: "eliminated"; readonly player: number }
   | { readonly type: "ended"; readonly ranking: readonly RankEntry[] }
-  /** Piège posé, annoncé à tous ; il est posé au tick du message `events` (03-Pieges §2 pour la mine). */
+  /**
+   * Piège posé, annoncé à tous ; il est posé au tick du message `events` (03-Pieges §2 pour la mine). Un
+   * bouclier est plein à ce tick.
+   */
   | { readonly type: "placed"; readonly cell: number; readonly kind: TrapKind; readonly player: number }
   /**
-   * Pose refusée : bonhomme trop loin de la case, case pas à lui ou déjà piégée, ou tourelle au-delà du
-   * tiers de ses cases. Au seul joueur.
+   * Pose refusée : bonhomme trop loin de la case, case pas à lui ou déjà piégée, ou tourelle (bouclier)
+   * au-delà d'une pour 3 (5) de ses cases. Au seul joueur.
    */
   | { readonly type: "not_placed"; readonly cell: number; readonly player: number }
   /**
@@ -215,6 +223,11 @@ export type GameEvent =
   | { readonly type: "launched"; readonly ball: number; readonly dx: number; readonly dy: number }
   /** La boule touche `player`, à qui il reste `hp` PV ; elle disparaît. */
   | { readonly type: "ball_hit"; readonly ball: number; readonly player: number; readonly hp: number }
+  /**
+   * La bulle de `player` arrête la boule, qui disparaît ; son bouclier de la case `cell` perd une unité et
+   * sera de nouveau plein au tick `full` (03-Pieges §4, `shieldCharge` du moteur).
+   */
+  | { readonly type: "blocked"; readonly ball: number; readonly player: number; readonly cell: number; readonly full: number }
   /** La boule disparaît sans partir : plus aucun adversaire à viser. */
   | { readonly type: "ball_gone"; readonly ball: number };
 
@@ -263,8 +276,8 @@ export type ServerMessage =
   /**
    * État complet de la partie, sans la solution : au lancement et à la reconnexion.
    * `givens` : 81 chiffres, `0` pour une case à remplir. `cells` : cases remplies par des joueurs.
-   * `traps` : les pièges et le tick de leur pose. `balls` : les boules en cours, `dx` et `dy` à 0 tant
-   * qu'elles ne sont pas parties.
+   * `traps` : les pièges, le tick de leur pose et, pour un bouclier, le tick où il est plein (0 sinon).
+   * `balls` : les boules en cours, `dx` et `dy` à 0 tant qu'elles ne sont pas parties.
    */
   | {
       readonly type: "state";
@@ -273,7 +286,7 @@ export type ServerMessage =
       readonly cells: readonly (readonly [cell: number, digit: number, player: number])[];
       readonly players: readonly PlayerState[];
       readonly ranking: readonly RankEntry[] | null;
-      readonly traps: readonly (readonly [cell: number, kind: TrapKind, player: number, placed: number])[];
+      readonly traps: readonly (readonly [cell: number, kind: TrapKind, player: number, placed: number, full: number])[];
       readonly balls: readonly (readonly [ball: number, cell: number, player: number, launch: number, dx: number, dy: number])[];
     }
   /**

@@ -2,22 +2,29 @@
 // `snapshot`, `events`), la prédiction de son propre bonhomme, l'interpolation des autres, les pièges et
 // les boules (03-Pieges). Phaser lit ce module à chaque image (scene.ts) ; il ne décide d'aucune règle :
 // cases, PV et éliminations viennent des événements de l'hôte. Seule exception : le contact entre son
-// bonhomme et une boule, que le client détecte et signale (01-Architecture §3, Pièges et projectiles).
+// bonhomme (ou sa bulle) et une boule, que le client détecte et signale (01-Architecture §3, Pièges et
+// projectiles).
 
 import {
   BALL_CHARGE_TICKS,
   BALL_CONTACT,
+  BUBBLE_CONTACT,
   CELL,
   MINE_REST_TICKS,
   MINE_SHRINK_TICKS,
+  SHIELD_UNIT_TICKS,
   START_HP,
-  TURRET_CELLS,
+  TRAP_CELLS,
+  activeShield,
   ballAt,
   ballOut,
   cellAt,
   cellCenter,
   move,
+  shieldCharge,
+  spendShield,
   within,
+  type ShieldLike,
 } from "@sudoku-deathmatch/engine";
 import {
   TICK_MS,
@@ -46,6 +53,24 @@ const PENDING_MS = 3000;
 const CANNON_HOLD_TICKS = 6;
 /** Rebond du cadre de la mine quand le grand cadre l'atteint (0,18 s). */
 const MINE_PULSE_TICKS = 3.6;
+/**
+ * Le cercle de la zone d'un de ses boucliers se voit quand son bonhomme est à moins de 3 cases du centre de
+ * sa case, en distance réelle (décidé, 03-Pieges §4).
+ */
+const ZONE_SHOW = 3 * CELL;
+
+const PLACED_TEXT: Readonly<Record<TrapKind, string>> = {
+  mine: "Mine posée : tout le monde la voit.",
+  turret: "Tourelle posée : premier tir dans 2 s, puis toutes les 6 s.",
+  shield: "Bouclier posé : à moins d’une case et demie, une bulle arrête 5 boules ; il se recharge en 30 s.",
+};
+
+/** Message d'une pose demandée sans assez de cases remplies (tourelle, bouclier). */
+const MISSING_TEXT: Readonly<Record<TrapKind, string>> = {
+  mine: "",
+  turret: `Une tourelle pour ${TRAP_CELLS.turret} cases remplies : remplissez-en d’autres.`,
+  shield: `Un bouclier pour ${TRAP_CELLS.shield} cases remplies : remplissez-en d’autres.`,
+};
 
 export interface ViewPlayer {
   readonly id: number;
@@ -61,11 +86,12 @@ export interface ViewPlayer {
   readonly y: number;
 }
 
-/** Un piège posé, et le tick de l'hôte où il l'a été. */
+/** Un piège posé, et le tick de l'hôte où il l'a été ; un bouclier, le tick où il est plein (`shieldCharge`). */
 export interface ClientTrap {
   readonly kind: TrapKind;
   readonly owner: number;
   readonly placed: number;
+  readonly full: number;
 }
 
 /**
@@ -88,6 +114,17 @@ export interface ViewTrap {
   readonly uy: number;
   /** Mine seulement. */
   readonly mine: MineLook | null;
+  /** Bouclier : charge en unités, de 0 à 5, fractionnaire pendant la recharge. Sinon 0. */
+  readonly charge: number;
+  /** Bouclier à soi, chargé d'une unité au moins, dont son bonhomme est à moins de 3 cases : le cercle de sa zone se voit. */
+  readonly zone: boolean;
+}
+
+/** Une bulle à dessiner autour du bonhomme de `player`, protégé par un de ses boucliers, en unités. */
+export interface ViewBubble {
+  readonly player: number;
+  readonly x: number;
+  readonly y: number;
 }
 
 /** Une boule à dessiner, en unités ; `progress` : avancement de la seconde d'attente, de 0 à 1. */
@@ -108,7 +145,9 @@ export type Fx =
   /** Une mine explose sous `player`. */
   | { readonly kind: "exploded"; readonly cell: number; readonly player: number }
   /** Une boule de `player` touche `victim` en (x, y), en unités. */
-  | { readonly kind: "pop"; readonly x: number; readonly y: number; readonly player: number; readonly victim: number };
+  | { readonly kind: "pop"; readonly x: number; readonly y: number; readonly player: number; readonly victim: number }
+  /** La bulle de `victim` arrête une boule de `player` en (x, y), en unités. */
+  | { readonly kind: "blocked"; readonly x: number; readonly y: number; readonly player: number; readonly victim: number };
 
 interface Snapshot {
   readonly tick: number;
@@ -228,7 +267,7 @@ export class PlaySession {
       }
     }
     this.traps.clear();
-    for (const [cell, kind, player, placed] of s.traps) this.traps.set(cell, { kind, owner: player, placed });
+    for (const [cell, kind, player, placed, full] of s.traps) this.traps.set(cell, { kind, owner: player, placed, full });
     this.#balls.clear();
     for (const [ball, cell, player, launch, dx, dy] of s.balls) {
       this.#balls.set(ball, { cell, owner: player, launch, dx, dy, launched: dx !== 0 || dy !== 0 });
@@ -347,15 +386,13 @@ export class PlaySession {
           this.ranking = ev.ranking;
           break;
         case "placed":
-          this.traps.set(ev.cell, { kind: ev.kind, owner: ev.player, placed: tick });
+          // Un bouclier est plein à sa pose.
+          this.traps.set(ev.cell, { kind: ev.kind, owner: ev.player, placed: tick, full: tick });
           // La mine a sa propre animation (le cadre qui se resserre) ; pas de particules.
-          if (ev.kind === "turret") this.fx.push({ kind: "placed", cell: ev.cell, player: ev.player });
+          if (ev.kind !== "mine") this.fx.push({ kind: "placed", cell: ev.cell, player: ev.player });
           if (ev.player === this.you) {
             this.#placing.delete(ev.cell);
-            this.#say(
-              ev.kind === "mine" ? "Mine posée : tout le monde la voit." : "Tourelle posée : premier tir dans 2 s, puis toutes les 6 s.",
-              now,
-            );
+            this.#say(PLACED_TEXT[ev.kind], now);
           }
           break;
         case "not_placed":
@@ -396,6 +433,19 @@ export class PlaySession {
             this.fx.push({ kind: "pop", x: at[0], y: at[1], player: b.owner, victim: ev.player });
           }
           if (ev.player === this.you) this.#say("Touché par une boule : un PV de moins.", now);
+          break;
+        }
+        case "blocked": {
+          // La charge vient de l'hôte, même si ce client a déjà retiré une unité en signalant la boule.
+          const trap = this.traps.get(ev.cell);
+          if (trap !== undefined) this.traps.set(ev.cell, { ...trap, full: ev.full });
+          const b = this.#balls.get(ev.ball);
+          if (b !== undefined) {
+            // Encore là : arrêtée par la bulle d'un autre bonhomme, ou par le contrôle de l'hôte.
+            this.#balls.delete(ev.ball);
+            const at = ballAt(b.cell, b.dx, b.dy, b.launch, this.#hazardTick(now));
+            this.fx.push({ kind: "blocked", x: at[0], y: at[1], player: b.owner, victim: ev.player });
+          }
           break;
         }
         case "ball_gone":
@@ -457,21 +507,42 @@ export class PlaySession {
   /**
    * Contact entre son bonhomme, à la position dessinée, et les boules adverses parties, au même instant de
    * la partie (01-Architecture §3, Pièges et projectiles) : la boule disparaît de l'écran et `hit` part.
-   * Sans #tickOffset, rien n'est testé ; le contrôle de l'hôte s'applique.
+   * Protégé par un de ses boucliers (03-Pieges §4), le contact se teste avec la bulle : `block` part, et le
+   * client retire tout de suite l'unité de charge (l'hôte renvoie la charge qui fait foi). Sans
+   * #tickOffset, rien n'est testé ; le contrôle de l'hôte s'applique.
    */
   #detectHits(): void {
     if (this.#tickOffset === null) return;
     const t = this.#localTick + this.#tickOffset;
     const x = this.#pos[0] + this.#smooth[0];
     const y = this.#pos[1] + this.#smooth[1];
+    let shields = this.#shields();
     for (const [id, b] of this.#balls) {
       if (!b.launched || b.owner === this.you || t <= b.launch) continue;
       const [bx, by] = ballAt(b.cell, b.dx, b.dy, b.launch, t);
+      const shield = activeShield(shields, this.you, x, y, t);
+      if (shield !== null) {
+        if (!within(bx, by, x, y, BUBBLE_CONTACT)) continue;
+        this.#balls.delete(id);
+        this.#send({ type: "block", ball: id });
+        const trap = this.traps.get(shield.cell);
+        if (trap !== undefined) this.traps.set(shield.cell, { ...trap, full: spendShield(trap.full, t) });
+        shields = this.#shields();
+        this.fx.push({ kind: "blocked", x: bx, y: by, player: b.owner, victim: this.you });
+        continue;
+      }
       if (!within(bx, by, x, y, BALL_CONTACT)) continue;
       this.#balls.delete(id);
       this.#send({ type: "hit", ball: id });
       this.fx.push({ kind: "pop", x: bx, y: by, player: b.owner, victim: this.you });
     }
+  }
+
+  /** Les boucliers connus, dans l'ordre de pose (celui des messages : `state`, puis `placed`). */
+  #shields(): ShieldLike[] {
+    const out: ShieldLike[] = [];
+    for (const [cell, trap] of this.traps) if (trap.kind === "shield") out.push({ cell, owner: trap.owner, full: trap.full });
+    return out;
   }
 
   /**
@@ -513,8 +584,9 @@ export class PlaySession {
    * Pièges et boules à dessiner maintenant. Le canon d'une tourelle est décoratif : il vise le bonhomme
    * adverse le plus proche tel que ce client le dessine (`players`), et suit la boule qui vient de partir.
    */
-  hazards(now: number, players: readonly ViewPlayer[]): { traps: ViewTrap[]; balls: ViewBall[] } {
+  hazards(now: number, players: readonly ViewPlayer[]): { traps: ViewTrap[]; balls: ViewBall[]; bubbles: ViewBubble[] } {
     const t = this.#hazardTick(now);
+    const me = players.find((p) => p.id === this.you && p.alive);
     const balls: ViewBall[] = [];
     const shots = new Map<number, ClientBall>();
     for (const b of this.#balls.values()) {
@@ -528,7 +600,15 @@ export class PlaySession {
       let ux = 0;
       let uy = -1;
       if (trap.kind === "mine") {
-        traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy, mine: this.#mineLook(trap, t) });
+        traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy, mine: this.#mineLook(trap, t), charge: 0, zone: false });
+        continue;
+      }
+      if (trap.kind === "shield") {
+        const [cx, cy] = cellCenter(cell);
+        const charge = shieldCharge(trap.full, t) / SHIELD_UNIT_TICKS;
+        // Sous une unité, le bouclier n'arrête plus rien : sa zone ne se voit plus (décidé, 03-Pieges §4).
+        const zone = trap.owner === this.you && charge >= 1 && me !== undefined && within(me.x, me.y, cx, cy, ZONE_SHOW);
+        traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy, mine: null, charge, zone });
         continue;
       }
       const shot = shots.get(cell);
@@ -548,9 +628,18 @@ export class PlaySession {
           uy = (p.y - cy) / len;
         }
       }
-      traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy, mine: null });
+      traps.push({ cell, kind: trap.kind, owner: trap.owner, ux, uy, mine: null, charge: 0, zone: false });
     }
-    return { traps, balls };
+    // Bulles : tout bonhomme protégé par un de ses boucliers, à la position où ce client le dessine. Celle
+    // des autres peut apparaître un peu en avance ou en retard sur leur bonhomme (interpolé dans le passé).
+    const shields = this.#shields();
+    const bubbles: ViewBubble[] = [];
+    if (shields.length > 0) {
+      for (const p of players) {
+        if (p.alive && activeShield(shields, p.id, p.x, p.y, t) !== null) bubbles.push({ player: p.id, x: p.x, y: p.y });
+      }
+    }
+    return { traps, balls, bubbles };
   }
 
   /**
@@ -604,22 +693,32 @@ export class PlaySession {
     this.#send({ type: "fill", cell, digit });
   }
 
-  /**
-   * Un piège peut être demandé sur la case sous son bonhomme : remplie par lui, sans piège (03-Pieges §1) ;
-   * pour une tourelle, une de plus doit rester dans le tiers de ses cases (03-Pieges §3).
-   */
-  canPlace(kind: TrapKind): boolean {
+  /** La case sous son bonhomme accepte un piège : remplie par lui, sans piège (03-Pieges §1). */
+  canPlaceHere(): boolean {
     if (!this.ready || this.ranking !== null || !this.youAlive) return false;
     const cell = this.myCell();
-    if (kind === "turret" && !this.#turretAllowed()) return false;
     return this.owner[cell] === this.you && !this.traps.has(cell) && !this.#placing.has(cell);
   }
 
-  /** Une tourelle de plus tient dans le tiers de ses cases (les poses en attente ne comptent pas : l'hôte vérifie). */
-  #turretAllowed(): boolean {
-    let turrets = 0;
-    for (const t of this.traps.values()) if (t.kind === "turret" && t.owner === this.you) turrets++;
-    return TURRET_CELLS * (turrets + 1) <= (this.score.get(this.you) ?? 0);
+  /** `canPlaceHere`, et pour une tourelle ou un bouclier, un de disponible (`trapProgress`). */
+  canPlace(kind: TrapKind): boolean {
+    return this.canPlaceHere() && this.trapProgress(kind).avail > 0;
+  }
+
+  /**
+   * Où en est le joueur avant son prochain piège `kind` (03-Pieges §1, Disponibilité) : `per` cases par
+   * piège (0 : sans limite, la mine) ; `done`, cases déjà remplies vers le prochain, de 0 à `per` (`per`
+   * quand il en a un de disponible) ; `avail`, pièges disponibles. Le n-ième demande n × `per` cases. Les
+   * poses en attente ne comptent pas : l'hôte vérifie.
+   */
+  trapProgress(kind: TrapKind): { per: number; done: number; avail: number } {
+    const per = TRAP_CELLS[kind];
+    if (per === 0) return { per: 0, done: 0, avail: 1 };
+    let placed = 0;
+    for (const t of this.traps.values()) if (t.kind === kind && t.owner === this.you) placed++;
+    const score = this.score.get(this.you) ?? 0;
+    const avail = Math.floor(score / per) - placed;
+    return avail > 0 ? { per, done: per, avail } : { per, done: Math.max(0, score - per * placed), avail: 0 };
   }
 
   /** Touche ou bouton d'un piège : le poser sur la case sous son bonhomme. L'hôte décide. */
@@ -629,9 +728,7 @@ export class PlaySession {
     if (this.owner[cell] !== this.you) return this.#say("Un piège se pose sur une case que vous avez remplie.", now);
     if (this.traps.has(cell)) return this.#say("Cette case a déjà un piège.", now);
     if (this.#placing.has(cell)) return;
-    if (kind === "turret" && !this.#turretAllowed()) {
-      return this.#say(`Une tourelle pour ${TURRET_CELLS} cases remplies : remplissez-en d'autres.`, now);
-    }
+    if (this.trapProgress(kind).avail <= 0) return this.#say(MISSING_TEXT[kind], now);
     this.#placing.set(cell, now);
     this.#send({ type: "place", cell, kind });
   }

@@ -6,6 +6,8 @@ import { ballAt, ballOut, cellCenter, directionPerMille, within } from "./ball.t
 import {
   BALL_CHARGE_TICKS,
   BALL_CONTACT,
+  BLOCK_CHECK_MARGIN,
+  BUBBLE_CONTACT,
   CATCH_UP_HP,
   CELL,
   FILL_TOLERANCE,
@@ -13,6 +15,7 @@ import {
   MINE_ARM_TICKS,
   MINE_DAMAGE,
   MINE_REST_TICKS,
+  SHIELD_CELLS,
   SPAWNS,
   START_HP,
   TURRET_CELLS,
@@ -20,8 +23,15 @@ import {
   TURRET_INTERVAL_TICKS,
 } from "./config.ts";
 import { DIR_MASK, cellAt, move } from "./move.ts";
+import { activeShield, spendShield } from "./shield.ts";
 
-export type TrapKind = "mine" | "turret";
+export type TrapKind = "mine" | "turret" | "shield";
+
+/**
+ * Cases remplies par piège en nombre limité : le n-ième demande n fois ce nombre (03-Pieges §3 et §4). La
+ * mine n'a pas de limite.
+ */
+export const TRAP_CELLS: Readonly<Record<TrapKind, number>> = { mine: 0, turret: TURRET_CELLS, shield: SHIELD_CELLS };
 
 export interface Player {
   readonly id: number;
@@ -53,8 +63,10 @@ export interface Trap {
    * explose, `placed` passe 20 s dans le futur : elle se recharge, puis sa pose se rejoue.
    */
   placed: number;
-  /** Tourelle : tick où sa prochaine boule apparaît. Mine : inutilisé. */
+  /** Tourelle : tick où sa prochaine boule apparaît. Sinon inutilisé. */
   nextBall: number;
+  /** Bouclier : tick où sa charge est pleine (dans le passé : elle l'est ; shield.ts). Sinon inutilisé. */
+  full: number;
 }
 
 /** Une boule de tourelle, visible depuis son apparition ; elle part au tick `launch`. */
@@ -82,6 +94,7 @@ export type EngineEvent =
   | { readonly type: "ball"; readonly ball: number; readonly cell: number; readonly player: number; readonly launch: number }
   | { readonly type: "launched"; readonly ball: number; readonly dx: number; readonly dy: number }
   | { readonly type: "ball_hit"; readonly ball: number; readonly player: number; readonly hp: number }
+  | { readonly type: "blocked"; readonly ball: number; readonly player: number; readonly cell: number; readonly full: number }
   | { readonly type: "ball_gone"; readonly ball: number };
 
 export interface Game {
@@ -123,6 +136,12 @@ export interface HitRequest {
   readonly ball: number;
 }
 
+/** Une boule arrêtée par sa bulle, signalée par le client du joueur protégé ; l'hôte vérifie. */
+export interface BlockRequest {
+  readonly player: number;
+  readonly ball: number;
+}
+
 /** Ce que l'hôte applique pendant un tick. */
 export interface TickInput {
   /** Nouvelle direction des joueurs qui en ont une ; les autres gardent la leur. */
@@ -130,6 +149,7 @@ export interface TickInput {
   readonly fills: readonly FillRequest[];
   readonly places: readonly PlaceRequest[];
   readonly hits: readonly HitRequest[];
+  readonly blocks: readonly BlockRequest[];
 }
 
 /**
@@ -154,8 +174,8 @@ export function createGame(puzzle: ArrayLike<number>, solution: ArrayLike<number
 
 /**
  * Applique un tick et renvoie ses événements. Une partie finie ne bouge plus. Ordre : déplacements,
- * remplissages, poses, contacts signalés, tourelles (départs puis apparitions), contrôle des boules,
- * mines, fin de partie.
+ * remplissages, poses, contacts signalés, boules arrêtées signalées, tourelles (départs puis apparitions),
+ * contrôle des boules, mines, fin de partie.
  */
 export function step(game: Game, input: TickInput): EngineEvent[] {
   if (game.ranking !== null) return [];
@@ -172,6 +192,7 @@ export function step(game: Game, input: TickInput): EngineEvent[] {
   for (const fill of input.fills) applyFill(game, fill, events);
   for (const place of input.places) applyPlace(game, place, events);
   for (const hit of input.hits) applyHit(game, hit, events);
+  for (const block of input.blocks) applyBlock(game, block, events);
   stepTurrets(game, events);
   controlBalls(game, events);
   stepMines(game, events);
@@ -246,15 +267,17 @@ function catchUp(game: Game, events: EngineEvent[]): void {
 
 /**
  * Pose : case remplie par ce joueur, sans piège, bonhomme dessus (même tolérance qu'un remplissage) ; une
- * tourelle de plus doit rester dans le tiers de ses cases (TURRET_CELLS).
+ * tourelle ou un bouclier de plus doit tenir dans ses cases (TRAP_CELLS : le n-ième demande n × 3 ou
+ * n × 5 cases). Un bouclier est posé plein (provisoire).
  */
 function applyPlace(game: Game, place: PlaceRequest, events: EngineEvent[]): void {
   const p = alivePlayer(game, place.player);
   if (p === undefined) return;
   if (!Number.isInteger(place.cell) || place.cell < 0 || place.cell > 80) return;
-  if (place.kind !== "mine" && place.kind !== "turret") return;
-  const turrets = game.traps.filter((t) => t.kind === "turret" && t.owner === p.id).length;
-  const tooMany = place.kind === "turret" && TURRET_CELLS * (turrets + 1) > p.score;
+  if (place.kind !== "mine" && place.kind !== "turret" && place.kind !== "shield") return;
+  const per = TRAP_CELLS[place.kind];
+  const same = game.traps.filter((t) => t.kind === place.kind && t.owner === p.id).length;
+  const tooMany = per > 0 && per * (same + 1) > p.score;
   if (game.owner[place.cell] !== p.id || game.traps.some((t) => t.cell === place.cell) || !near(p, place.cell) || tooMany) {
     events.push({ type: "not_placed", cell: place.cell, player: p.id });
     return;
@@ -265,8 +288,37 @@ function applyPlace(game: Game, place: PlaceRequest, events: EngineEvent[]): voi
     owner: p.id,
     placed: game.tick,
     nextBall: place.kind === "turret" ? game.tick + TURRET_FIRST_TICKS : 0,
+    full: game.tick,
   });
   events.push({ type: "placed", cell: place.cell, kind: place.kind, player: p.id });
+}
+
+function shields(game: Game): Trap[] {
+  return game.traps.filter((t) => t.kind === "shield");
+}
+
+/** La bulle de `p` arrête `ball` grâce au bouclier `shield` : une unité de moins, la boule disparaît. */
+function block(game: Game, p: Player, ball: Ball, shield: Trap, events: EngineEvent[]): void {
+  removeBall(game, ball);
+  shield.full = spendShield(shield.full, game.tick);
+  events.push({ type: "blocked", ball: ball.id, player: p.id, cell: shield.cell, full: shield.full });
+}
+
+/**
+ * Boule arrêtée signalée par le client : contrairement à `hit`, elle profite à celui qui la signale, donc
+ * l'hôte vérifie qu'elle était possible, à BLOCK_CHECK_MARGIN près sur sa propre position du bonhomme : un
+ * de ses boucliers avec une unité au moins, assez proche, et la boule au contact de la bulle. Sinon le
+ * signalement est ignoré, et la boule continue (le contrôle de l'hôte s'applique).
+ */
+function applyBlock(game: Game, req: BlockRequest, events: EngineEvent[]): void {
+  const p = alivePlayer(game, req.player);
+  const ball = game.balls.find((b) => b.id === req.ball);
+  if (p === undefined || ball === undefined || ball.owner === p.id || !launched(ball, game.tick)) return;
+  const shield = activeShield(shields(game), p.id, p.x, p.y, game.tick, BLOCK_CHECK_MARGIN);
+  if (shield === null) return;
+  const [x, y] = ballAt(ball.cell, ball.dx, ball.dy, ball.launch, game.tick);
+  if (!within(x, y, p.x, p.y, BUBBLE_CONTACT + BLOCK_CHECK_MARGIN)) return;
+  block(game, p, ball, shield, events);
 }
 
 function launched(ball: Ball, tick: number): boolean {
@@ -333,10 +385,13 @@ function stepTurrets(game: Game, events: EngineEvent[]): void {
 
 /**
  * Boules parties : sortie de la grille (disparition, sans événement : chaque client la calcule), et
- * contrôle de l'hôte, qui compte un contact évident même si le client ne l'a pas signalé.
+ * contrôle de l'hôte, qui compte un contact évident même si le client ne l'a pas signalé : avec la bulle
+ * d'un bonhomme protégé (la boule est arrêtée), sinon avec le bonhomme.
  */
 function controlBalls(game: Game, events: EngineEvent[]): void {
   const reach = BALL_CONTACT - HIT_CONTROL_MARGIN;
+  const bubbleReach = BUBBLE_CONTACT - HIT_CONTROL_MARGIN;
+  const all = shields(game);
   for (const ball of game.balls.slice()) {
     if (!launched(ball, game.tick)) continue;
     const [x, y] = ballAt(ball.cell, ball.dx, ball.dy, ball.launch, game.tick);
@@ -345,7 +400,14 @@ function controlBalls(game: Game, events: EngineEvent[]): void {
       continue;
     }
     for (const p of game.players) {
-      if (!p.alive || p.id === ball.owner || !within(x, y, p.x, p.y, reach)) continue;
+      if (!p.alive || p.id === ball.owner) continue;
+      const shield = all.length > 0 ? activeShield(all, p.id, p.x, p.y, game.tick) : null;
+      if (shield !== null) {
+        if (!within(x, y, p.x, p.y, bubbleReach)) continue;
+        block(game, p, ball, shield, events);
+        break;
+      }
+      if (!within(x, y, p.x, p.y, reach)) continue;
       removeBall(game, ball);
       damage(game, p, events, (hp) => ({ type: "ball_hit", ball: ball.id, player: p.id, hp }));
       break;

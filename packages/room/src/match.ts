@@ -2,14 +2,14 @@
 // une direction appliquée par tick, remplissages dans l'ordre d'arrivée, moteur, snapshots et événements.
 // Comme `Room`, elle ne connaît ni horloge ni réseau : l'enveloppe appelle `step` à chaque tick.
 
-import { createGame, step, type FillRequest, type Game, type HitRequest, type PlaceRequest } from "@sudoku-deathmatch/engine";
+import { createGame, step, type BlockRequest, type FillRequest, type Game, type HitRequest, type PlaceRequest } from "@sudoku-deathmatch/engine";
 import type { GameEvent, PlayerState, ServerMessage, TrapKind } from "@sudoku-deathmatch/shared";
 
 /** Entrées en attente au-delà desquelles l'hôte ne garde que la dernière (01-Architecture §3, provisoire). */
 export const MAX_QUEUED_INPUTS = 2;
 /** Remplissages d'un joueur acceptés dans un même tick ; les suivants sont ignorés. */
 export const MAX_FILLS_PER_TICK = 4;
-/** Poses de piège et contacts signalés d'un joueur acceptés dans un même tick. */
+/** Poses de piège et contacts signalés (boules arrêtées comprises) d'un joueur acceptés dans un même tick. */
 export const MAX_PLACES_PER_TICK = 2;
 export const MAX_HITS_PER_TICK = 4;
 
@@ -37,6 +37,7 @@ export class Match {
   #fills: FillRequest[] = [];
   #places: PlaceRequest[] = [];
   #hits: HitRequest[] = [];
+  #blocks: BlockRequest[] = [];
 
   constructor(puzzle: readonly number[], solution: readonly number[], playerIds: readonly number[]) {
     this.game = createGame(puzzle, solution, playerIds);
@@ -100,6 +101,14 @@ export class Match {
     this.#hits.push({ player, ball });
   }
 
+  /** Boule arrêtée par la bulle du joueur, d'après son écran ; le moteur vérifie (`applyBlock`). */
+  block(player: number, ball: number): void {
+    const track = this.#tracks.get(player);
+    if (track === undefined || track.hitsThisTick >= MAX_HITS_PER_TICK) return;
+    track.hitsThisTick++;
+    this.#blocks.push({ player, ball });
+  }
+
   /** Un tick : une entrée par joueur sortie de sa file, les remplissages, poses et contacts reçus, puis le moteur. */
   step(): GameEvent[] {
     const dirs = new Map<number, number>();
@@ -117,10 +126,12 @@ export class Match {
     const fills = this.#fills;
     const places = this.#places;
     const hits = this.#hits;
+    const blocks = this.#blocks;
     this.#fills = [];
     this.#places = [];
     this.#hits = [];
-    return step(this.game, { dirs, fills, places, hits });
+    this.#blocks = [];
+    return step(this.game, { dirs, fills, places, hits, blocks });
   }
 
   /** Positions des bonshommes non éliminés, communes à tous les destinataires. */
@@ -145,7 +156,7 @@ export class Match {
     // Toutes les mines vont à tous : chacun a vu leur pose (03-Pieges §2). `recipient` reste pour un
     // état propre à chaque joueur.
     void recipient;
-    const traps = g.traps.map((t): [number, TrapKind, number, number] => [t.cell, t.kind, t.owner, t.placed]);
+    const traps = g.traps.map((t): [number, TrapKind, number, number, number] => [t.cell, t.kind, t.owner, t.placed, t.kind === "shield" ? t.full : 0]);
     const balls = g.balls.map((b): [number, number, number, number, number, number] => [b.id, b.cell, b.owner, b.launch, b.dx, b.dy]);
     return { type: "state", tick: g.tick, givens, cells, players, ranking: g.ranking, traps, balls };
   }

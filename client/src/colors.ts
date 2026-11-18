@@ -28,3 +28,9 @@ export function playerColor(index: number): PlayerColor {
 export function hexToInt(hex: string): number {
   return Number.parseInt(hex.slice(1), 16);
 }
+
+/** `#RRGGBB` et une opacité → `rgba(…)`, pour le CSS. */
+export function rgba(hex: string, alpha: number): string {
+  const n = hexToInt(hex);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
