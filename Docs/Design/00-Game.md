@@ -68,7 +68,8 @@ Décidé par l'auteur le 15 novembre 2026.
   étiquette du même aspect que ce bouton dit « L'hôte peut relancer » (décidé
   le 16 novembre 2026).
 
-  Panneau des joueurs, à droite de la grille (décidé le 16 novembre 2026) :
+  Panneau des joueurs, à droite de la grille (décidé le 16 novembre 2026 ; sur
+  téléphone, en bas de la page, voir Écran de jeu sur téléphone) :
   pendant la partie, les joueurs y sont classés par nombre de cases remplies ;
   une fois la partie finie, c'est lui qui montre le classement (le fond gris
   ne le répète pas), avec les couleurs des joueurs, et une couronne jaune à
@@ -112,6 +113,38 @@ Décidé par l'auteur le 15 novembre 2026.
   règles (4 PV, 2 PV de la mine, 20 s de recharge, 1 PV par boule, une
   tourelle pour 3 cases et un bouclier pour 5, 3 unités de charge) : quand
   l'une change, le tutoriel change avec elle.
+- **Écran de jeu sur téléphone** (décidé le 19 novembre 2026 : variante C de
+  la maquette « Sudoku Deathmatch — téléphone »,
+  https://claude.ai/artifact/5VWGTbwfkeJNXzF7nmNntm, sans son bandeau du
+  haut). Avant, sur un téléphone, la grille dépassait de l'écran à droite.
+  Pendant une partie, sur un écran étroit :
+  - pas d'en-tête (logo, nom du jeu, « Partie en cours ») ;
+  - en haut, les boîtes des joueurs en 2 × 2, plus petites, avec à droite le
+    nombre de cases remplies par chacun ;
+  - la grille, de la largeur de l'écran ;
+  - dessous, sur une ligne : à gauche une croix d'une seule pièce pour se
+    déplacer, au milieu les chiffres en pavé 3 × 3 (1 2 3 en haut), à droite
+    les trois boutons des pièges empilés, sans la lettre de leur touche, avec
+    « ×2 » en pastille sur le coin de l'icône ;
+  - en bas de la page, en faisant défiler : le panneau des joueurs (qui montre
+    le classement de fin), puis le bouton Quitter. Le niveau et les cases à
+    remplir n'apparaissent que dans ce panneau. Le fond sombre de la fin dit
+    « Classement en bas de la page ».
+
+  Provisoire :
+  - écran étroit : moins de 700 px de large. Le téléphone tenu en largeur
+    n'est pas traité ;
+  - croix : un doigt posé sur une branche donne sa direction ; dans un coin
+    entre deux branches, la diagonale ; près du centre (moins d'un quart de
+    branche), rien. Le doigt glisse d'une direction à l'autre sans se lever ;
+    les autres doigts restent libres pour les chiffres et les pièges ;
+  - un bouton de chiffre ou de piège agit dès l'appui, pas au relâchement
+    (sur ordinateur aussi) ;
+  - le message (« Touché par une boule… ») s'affiche par-dessus le bas de la
+    grille, sur fond sombre ;
+  - écran trop court pour une grille de toute la largeur (iPhone SE) : la
+    grille rapetisse, pour que la croix, les chiffres et les pièges restent
+    visibles sans faire défiler.
 - **Bots** (décidé le 18 novembre 2026). Dans la salle d'attente du solo,
   l'hôte ajoute des bots, qui remplissent une case toutes les n secondes selon
   leur difficulté et posent des pièges. Simples, ils servent de remplaçants

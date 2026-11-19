@@ -506,8 +506,9 @@ Propre à ce jeu :
   l'écran). À chaque image : son bonhomme interpolé entre ses deux derniers
   ticks prédits (corrigé progressivement), les autres interpolés entre deux
   snapshots (§3), la grille et ses couleurs, les PV en haut de la grille.
-- **Clavier** : l'état des flèches est lu une fois par tick (§3) ; jamais un
-  `input` par image ni par événement clavier.
+- **Clavier et croix tactile** : l'état des flèches et de la croix (sur
+  téléphone) est lu une fois par tick (§3) ; jamais un `input` par image ni
+  par événement clavier ou tactile.
 - **Tirs** : annoncés une fois par un événement, leur trajectoire est calculée
   par chaque client (§3, Pièges et projectiles) ; ils n'entrent pas dans les
   snapshots. Des zombies (idée non décidée, `00-Game.md` §3), qui
@@ -645,6 +646,13 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
     Vérifié : typecheck, build du client, absence du catalogue en ligne dans
     `client/dist`. Pas vérifié : une partie jouée, l'affichage dans un
     navigateur.
+12. **Fait (19 novembre 2026) : écran de jeu sur téléphone** (`00-Game.md`
+    §1). Client seulement : `style.css` (bloc « Écran de téléphone »),
+    `touchpad.ts` (croix), `screen.ts` (`PHONE_QUERY`, `onPress`, pastille
+    « ×2 », `#game-toast`), `drawHud` de `scene.ts` (`HUD_PHONE`, cases
+    remplies), `index.html` (`.game-controls`, `#game-cross`,
+    `#game-toast`). Vérifié : typecheck, build du client. Pas vérifié :
+    l'affichage et le toucher sur un téléphone.
 
 ### Choix faits à l'implémentation (provisoires)
 
@@ -748,10 +756,30 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   montrent les PV du dernier dessin d'avant `hp_max` (`bonusLook`) :
   l'événement a déjà ramené les PV à 4 au plus.
   Sa hauteur dépend du nombre de joueurs (`hudHeight` : 64 px, ou 122 px à 3 ou
-  4), donc celle de la vue aussi (`viewHeight`) : `screen.ts` la pose sur
-  `#game-canvas` avant que Phaser charge, et `.game-stage` (où se pose le fond
-  de fin) la suit. Le haut de la grille est `TOP` dans `createGameView`, plus
-  une constante du module.
+  4), donc celle de la vue aussi (`viewHeight`) : `screen.ts` la pose en
+  `--view-h` sur `#screen-game` avant que Phaser charge ; `#game-canvas` a le
+  rapport 504 sur `--view-h`, et `.game-stage` (où se pose le fond de fin) le
+  suit. Le haut de la grille est `TOP` dans `createGameView`, plus une
+  constante du module. Sur téléphone, mêmes cases de 58 px, contenu
+  `HUD_PHONE` (nom de 17 px, raccourci avec « … » avant le nombre de cases
+  remplies, de 26 px).
+- **Écran de téléphone** (`style.css`, `@media (max-width: 699px)` ;
+  `PHONE_QUERY` dans `screen.ts`, même seuil, relu à chaque image par
+  `drawHud`). La vue Phaser reste de 504 px de large : son canvas est étiré à
+  la largeur de `.game-canvas` (71 % à 360 px). La largeur de la grille est le
+  plus petit de la largeur de l'écran et de `(100svh − 3 × --k − 22 px) × 504
+  / --view-h`, `--k` étant le côté d'une touche (`min(44px, 10.5vw)`) : les
+  commandes restent visibles sur un écran court. `body[data-screen]`
+  (`show` de `main.ts`) retire l'en-tête pendant une partie. Phaser ne lit ni
+  la souris ni le toucher (`input` de la configuration) : sinon il bloque le
+  défilement de la page quand le doigt est sur la grille. Message :
+  `#game-toast`, dans `.game-stage`, à la place de `#game-message`. Croix
+  (`touchpad.ts`) : SVG dans `#game-cross`, `pointerdown` puis capture du
+  doigt (`setPointerCapture`), direction recalculée à chaque `pointermove`
+  (`crossDir`), un seul doigt à la fois sur la croix ; `touch-action: none`
+  sur la croix, `manipulation` sur les autres boutons (pas de zoom au double
+  toucher). Chiffres et pièges (`onPress` de `screen.ts`) : action au
+  `pointerdown` ; le `click` n'agit que venu du clavier (`detail` à 0).
 
 ## 10. Pièges
 

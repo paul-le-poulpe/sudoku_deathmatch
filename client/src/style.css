@@ -484,7 +484,10 @@ p {
   overflow-x: auto;
 }
 
-/* Hauteur : celle de .game-canvas, que screen.ts pose (568 px jusqu'à 2 joueurs, 626 px à 3 ou 4). */
+/*
+ * Hauteur : celle de .game-canvas, dont la largeur et la hauteur sont dans le rapport de la vue Phaser :
+ * 504 sur --view-h, que screen.ts pose sur #screen-game (568 jusqu'à 2 joueurs, 626 à 3 ou 4).
+ */
 .game-stage {
   position: relative;
   width: 504px;
@@ -492,9 +495,40 @@ p {
 
 .game-canvas {
   width: 504px;
-  height: 568px;
+  aspect-ratio: 504 / var(--view-h, 568);
   border-radius: 10px;
   overflow: hidden;
+}
+
+/*
+ * Le canvas de Phaser, à sa taille de 504 px de large, est étiré à celle de .game-canvas (plus petite sur
+ * téléphone). Le doigt posé sur la grille fait défiler la page ; un double toucher ne zoome pas.
+ */
+.game-canvas > canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: manipulation !important;
+}
+
+/* Message par-dessus le bas de la grille : sur téléphone seulement (écran de téléphone, plus bas). */
+.game-toast {
+  display: none;
+}
+
+.phone-only {
+  display: none;
+}
+
+.game-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Croix tactile (touchpad.ts) : sur téléphone seulement. */
+.cross {
+  display: none;
 }
 
 .game-end {
@@ -651,12 +685,28 @@ p {
   opacity: 0.55;
 }
 
-/* Plusieurs pièges disponibles : « ×2 » après le nom. */
+/* Plusieurs pièges disponibles : « ×2 » après le nom ; sur téléphone, en pastille sur le coin de l'icône. */
 .trap-count {
   margin-left: 6px;
   font-size: 12px;
   font-weight: 700;
   color: var(--ink2);
+}
+
+.trap-badge {
+  display: none;
+  position: absolute;
+  left: 19px;
+  top: 2px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  border: 1px solid var(--c);
+  background: var(--surface);
+  color: var(--ink2);
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 700;
 }
 
 /* Dessin d'une touche : sur les boutons des pièges, et dans l'encadré des commandes. */
@@ -876,6 +926,215 @@ p {
 @media (prefers-reduced-motion: reduce) {
   .crown {
     animation: none;
+  }
+}
+
+/* Croix tactile : branche appuyée en gris clair, sa flèche en noir. */
+.cross svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.cross-arm {
+  fill: transparent;
+}
+
+.cross-arrow {
+  fill: var(--muted);
+}
+
+.cross.up .cross-arm.cross-up,
+.cross.down .cross-arm.cross-down,
+.cross.left .cross-arm.cross-left,
+.cross.right .cross-arm.cross-right {
+  fill: var(--soft);
+}
+
+.cross.up .cross-arrow.cross-up,
+.cross.down .cross-arrow.cross-down,
+.cross.left .cross-arrow.cross-left,
+.cross.right .cross-arrow.cross-right {
+  fill: var(--ink);
+}
+
+/*
+ * Écran de téléphone (00-Game §1, Écran de jeu sur téléphone ; variante C de la maquette « Sudoku
+ * Deathmatch — téléphone », sans son bandeau du haut). Même seuil que PHONE_QUERY (screen.ts). Pendant une
+ * partie, pas d'en-tête ni de marges : la grille prend la largeur de l'écran, et dessous, sur une ligne, la
+ * croix, le pavé des chiffres et les pièges. Le panneau des joueurs et Quitter sont en bas de la page.
+ * --k : côté d'une touche du pavé, d'un bouton de piège en hauteur et d'une branche de la croix (38 px à
+ * 360 px de large, 41 à 390, 44 au plus).
+ */
+@media (max-width: 699px) {
+  body[data-screen="game"] .page {
+    padding: 0 0 24px;
+    gap: 0;
+  }
+
+  body[data-screen="game"] .brand {
+    display: none;
+  }
+
+  .desk-only {
+    display: none;
+  }
+
+  .phone-only {
+    display: inline;
+  }
+
+  #screen-game {
+    --k: min(44px, 10.5vw);
+  }
+
+  .game {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+
+  .game-main {
+    width: 100%;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  /*
+   * Sur un écran trop court pour la grille à pleine largeur, elle rapetisse pour que les commandes restent
+   * visibles sans faire défiler : il faut sous la vue 8 px, les commandes (3 × --k + 8 px), et 6 px. 100svh :
+   * hauteur visible quand les barres du navigateur sont affichées (la grille ne change pas de taille quand
+   * elles se replient).
+   */
+  .game-stage {
+    width: 100%;
+    width: min(100%, calc((100vh - 3 * var(--k) - 22px) * 504 / var(--view-h)));
+    width: min(100%, calc((100svh - 3 * var(--k) - 22px) * 504 / var(--view-h)));
+    margin: 0 auto;
+  }
+
+  .game-canvas,
+  .game-end {
+    border-radius: 0;
+  }
+
+  .game-canvas {
+    width: 100%;
+  }
+
+  .game-toast {
+    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 16px);
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(28, 25, 23, 0.86);
+    color: #ffffff;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .game-toast:empty {
+    display: none;
+  }
+
+  .game-message {
+    display: none;
+  }
+
+  /* Le doigt glissé sur les boutons fait défiler la page, sans zoom ni sélection du texte. */
+  .game-controls {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 6px;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Sur la croix, le doigt ne fait pas défiler la page. */
+  .cross {
+    display: block;
+    flex: none;
+    width: calc(3 * var(--k));
+    touch-action: none;
+  }
+
+  .game-controls .digits {
+    flex: none;
+    width: auto;
+    grid-template-columns: repeat(3, var(--k));
+    grid-auto-rows: var(--k);
+    gap: 4px;
+  }
+
+  .game-controls .digit {
+    min-height: 0;
+    padding: 0;
+    font-size: 18px;
+  }
+
+  .game-controls .traps {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .game-controls .trap {
+    min-height: 0;
+    height: var(--k);
+    gap: 6px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  /* Icône de 28 px réduite à 20. */
+  .game-controls .trap-icon {
+    zoom: 0.72;
+  }
+
+  .game-controls .trap-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Pas de clavier : pas de lettre de touche ; « ×2 » passe en pastille. */
+  .game-controls .trap-key,
+  .game-controls .trap-label .trap-count {
+    display: none;
+  }
+
+  .game-controls .trap-badge {
+    display: block;
+  }
+
+  .game-side {
+    flex: none;
+    padding: 0 16px;
+  }
+
+  .game-side .card {
+    padding: 16px;
+  }
+
+  .keys-card {
+    display: none;
   }
 }
 

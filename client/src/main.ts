@@ -44,6 +44,8 @@ const SUBTITLES: Readonly<Record<Screen, string>> = {
 function show(screen: Screen): void {
   for (const s of ["home", "create", "join", "room", "game"] as const) $(`screen-${s}`).hidden = s !== screen;
   $("subtitle").textContent = SUBTITLES[screen];
+  // Lu par style.css : sur téléphone, l'en-tête disparaît pendant une partie.
+  document.body.dataset.screen = screen;
 }
 
 function notice(text: string | null): void {

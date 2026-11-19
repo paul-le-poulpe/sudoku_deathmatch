@@ -133,15 +133,18 @@
         </div>
       </section>
 
-      <!-- Partie : vue Phaser (src/play/scene.ts) et panneau HTML (src/play/screen.ts). -->
+      <!-- Partie : vue Phaser (src/play/scene.ts) et panneau HTML (src/play/screen.ts). Sur téléphone
+           (style.css, « écran de téléphone ») : croix, pavé et pièges sur une ligne sous la grille ; message
+           par-dessus le bas de la grille ; panneau et Quitter en bas de la page. -->
       <section id="screen-game" class="screen" hidden>
         <div class="game">
           <div class="game-main">
             <div class="game-stage">
               <div id="game-canvas" class="game-canvas"></div>
+              <p id="game-toast" class="game-toast" aria-live="polite"></p>
               <div id="game-end" class="game-end" hidden>
                 <span class="end-title">Partie terminée</span>
-                <span class="end-note">Classement à droite : d'abord les survivants, au nombre de cases remplies, puis les éliminés, du dernier au premier.</span>
+                <span class="end-note"><span class="desk-only">Classement à droite</span><span class="phone-only">Classement en bas de la page</span> : d'abord les survivants, au nombre de cases remplies, puis les éliminés, du dernier au premier.</span>
                 <div class="end-actions">
                   <button id="game-end-restart" type="button" class="btn btn-light" hidden>Relancer une partie</button>
                   <span id="game-end-wait" class="btn btn-light btn-static" hidden>L'hôte peut relancer</span>
@@ -149,8 +152,11 @@
                 </div>
               </div>
             </div>
-            <div id="game-digits" class="digits" role="group" aria-label="Écrire un chiffre"></div>
-            <div id="game-traps" class="traps" role="group" aria-label="Poser un piège"></div>
+            <div class="game-controls">
+              <div id="game-cross" class="cross" aria-hidden="true"></div>
+              <div id="game-digits" class="digits" role="group" aria-label="Écrire un chiffre"></div>
+              <div id="game-traps" class="traps" role="group" aria-label="Poser un piège"></div>
+            </div>
             <p id="game-message" class="game-message" aria-live="polite"></p>
           </div>
           <aside class="game-side">
@@ -159,7 +165,7 @@
               <span id="game-level" class="muted"></span>
               <div id="game-scores" class="scores"></div>
             </section>
-            <section class="card">
+            <section class="card keys-card">
               <h2>Commandes</h2>
               <dl class="controls">
                 <div class="control">

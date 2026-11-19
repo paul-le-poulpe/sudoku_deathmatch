@@ -22,8 +22,9 @@ Décidé par l'auteur le 15 novembre 2026.
 
 - **« Piège » est le mot générique** : les tourelles sont des pièges.
 - **Poser.** Sous les boutons des chiffres, une ligne montre tous les pièges
-  disponibles. Un clic sur l'un d'eux le pose sur la case où se trouve le
-  bonhomme, à deux conditions : la case a été remplie par ce joueur (son
+  disponibles (sur téléphone, empilés à droite du pavé des chiffres :
+  `00-Game.md` §1, Écran de jeu sur téléphone). Un clic sur l'un d'eux le
+  pose sur la case où se trouve le bonhomme, à deux conditions : la case a été remplie par ce joueur (son
   chiffre est de sa couleur), et elle n'a pas encore de piège.
 - **Disponibilité** (décidé le 18 novembre 2026). Le bouton d'un piège en
   nombre limité (tourelle, bouclier) montre combien de cases il reste à
@@ -34,7 +35,8 @@ Décidé par l'auteur le 15 novembre 2026.
   « Barre des pièges » de la maquette du bouclier, §4). La mine, sans limite,
   a toujours son bouton plein.
 
-  Provisoire : « ×2 » à côté du nom quand plusieurs sont disponibles ; tant
+  Provisoire : « ×2 » à côté du nom quand plusieurs sont disponibles (sur
+  téléphone, en pastille sur le coin de l'icône) ; tant
   que le piège n'est pas disponible, nom en gris et icône à 55 %.
 - **Aspect.** Le chiffre reste au centre de la case ; le piège est dessiné dans
   l'espace qui reste. Chaque piège a un dessin distinct.

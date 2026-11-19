@@ -1,6 +1,6 @@
 // L'écran de partie : la vue Phaser (scene.ts), et autour en HTML les boutons des chiffres et des pièges,
-// le message, le panneau des joueurs et le classement de fin. Créé au message `start`, détruit en
-// quittant la partie.
+// la croix tactile (touchpad.ts), le message, le panneau des joueurs et le classement de fin. Créé au
+// message `start`, détruit en quittant la partie.
 
 import type { ClientMessage, ServerMessage, TrapKind } from "@sudoku-deathmatch/shared";
 
@@ -9,6 +9,31 @@ import { LEVEL_LABEL } from "../levels.ts";
 import { Keyboard } from "./keyboard.ts";
 import { createGameView, viewHeight, type GameView } from "./scene.ts";
 import { PlaySession } from "./session.ts";
+import { TouchPad } from "./touchpad.ts";
+
+/**
+ * Écran de téléphone (00-Game §1) : même seuil que le `@media` de style.css. Lu à chaque image par la vue
+ * Phaser (boîtes des joueurs avec leurs cases remplies), donc suivi si la fenêtre change de largeur.
+ */
+export const PHONE_QUERY = "(max-width: 699px)";
+
+/**
+ * Un bouton du pavé ou des pièges agit dès l'appui (`pointerdown`), pas au relâchement : sur un écran
+ * tactile, un second doigt est compté pendant que le premier tient la croix, ce que le `click` ne garantit
+ * pas. Le `click` du clavier (Entrée, Espace sur un bouton qui a le focus, `detail` à 0) agit aussi ; celui
+ * qui suit un appui de souris ou de doigt est ignoré. L'appui ne prend pas le focus : les flèches restent
+ * au jeu.
+ */
+function onPress(b: HTMLButtonElement, press: () => void): void {
+  b.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (!b.disabled) press();
+  });
+  b.addEventListener("mousedown", (e) => e.preventDefault());
+  b.addEventListener("click", (e) => {
+    if (e.detail === 0) press();
+  });
+}
 
 export interface PlayController {
   onMessage(msg: ServerMessage): void;
@@ -53,11 +78,16 @@ export function startPlay(options: {
   keyboard.onDigit = (d) => session.pressDigit(d, performance.now());
   keyboard.onTrap = (kind) => session.pressTrap(kind, performance.now());
   keyboard.attach();
+  const pad = new TouchPad($("game-cross"));
+  pad.attach();
+  const phone = window.matchMedia(PHONE_QUERY);
 
   const canvas = $("game-canvas");
   canvas.replaceChildren();
-  // Hauteur de la vue Phaser (bandeau des PV d'une ou deux lignes), posée avant qu'elle charge.
-  canvas.style.height = `${viewHeight(options.start.players.length)}px`;
+  // Hauteur de la vue Phaser (bandeau des PV d'une ou deux lignes ; largeur VIEW_W, 504, écrite dans
+  // style.css), posée avant qu'elle charge : style.css en tire la hauteur de #game-canvas, et sur téléphone
+  // la largeur de la grille sur un écran court.
+  $("screen-game").style.setProperty("--view-h", String(viewHeight(options.start.players.length)));
   $("game-title").textContent = options.title;
   $("game-end").hidden = true;
 
@@ -68,10 +98,7 @@ export function startPlay(options: {
       b.type = "button";
       b.className = "digit";
       b.textContent = String(d);
-      b.addEventListener("click", () => {
-        session.pressDigit(d, performance.now());
-        b.blur();
-      });
+      onPress(b, () => session.pressDigit(d, performance.now()));
       return b;
     }),
   );
@@ -112,11 +139,14 @@ export function startPlay(options: {
     chip.className = "trap-key";
     chip.setAttribute("aria-hidden", "true");
     chip.textContent = key;
-    b.append(icon, text, chip);
-    // Le clic ne prend pas le focus : les flèches restent au jeu.
-    b.addEventListener("mousedown", (e) => e.preventDefault());
-    b.addEventListener("click", () => session.pressTrap(kind, performance.now()));
-    return { kind, aria, button: b, fill, count, look: "" };
+    // Le même « ×2 », en pastille sur le coin de l'icône : sur téléphone, à la place de celui après le nom.
+    const badge = document.createElement("span");
+    badge.className = "trap-badge";
+    badge.setAttribute("aria-hidden", "true");
+    badge.hidden = true;
+    b.append(icon, text, chip, badge);
+    onPress(b, () => session.pressTrap(kind, performance.now()));
+    return { kind, aria, button: b, fill, count, badge, look: "" };
   });
   $("game-traps").replaceChildren(...trapButtons.map((t) => t.button));
 
@@ -137,7 +167,7 @@ export function startPlay(options: {
 
   let view: GameView | null = null;
   let destroyed = false;
-  void createGameView(canvas, session, () => keyboard.dir()).then((v) => {
+  void createGameView(canvas, session, () => keyboard.dir() | pad.dir(), () => phone.matches).then((v) => {
     if (destroyed) v.destroy();
     else view = v;
   });
@@ -190,12 +220,18 @@ export function startPlay(options: {
   };
   session.onChange = renderPanel;
 
-  // Le message sous la grille s'efface tout seul, et les boutons des pièges suivent la case sous le
-  // bonhomme et les cases remplies : relus quelques fois par seconde ; le DOM ne change que si l'état change.
+  // Le message sous les pièges (sur téléphone : par-dessus le bas de la grille, #game-toast ; style.css
+  // n'en montre qu'un) s'efface tout seul, et les boutons des pièges suivent la case sous le bonhomme et les
+  // cases remplies : relus quelques fois par seconde ; le DOM ne change que si l'état change.
   const message = $("game-message");
+  const toast = $("game-toast");
   const timer = setInterval(() => {
     const now = performance.now();
-    message.textContent = now < session.messageUntil ? session.message : "";
+    const said = now < session.messageUntil ? session.message : "";
+    if (message.textContent !== said) {
+      message.textContent = said;
+      toast.textContent = said;
+    }
     const here = session.canPlaceHere();
     for (const t of trapButtons) {
       const { per, done, avail } = session.trapProgress(t.kind);
@@ -210,6 +246,8 @@ export function startPlay(options: {
       t.button.disabled = !(here && ready);
       t.count.hidden = avail < 2;
       t.count.textContent = `×${avail}`;
+      t.badge.hidden = avail < 2;
+      t.badge.textContent = `×${avail}`;
       t.button.setAttribute("aria-label", ready ? t.aria : `${t.aria} : ${done} case${done > 1 ? "s" : ""} remplie${done > 1 ? "s" : ""} sur ${per}`);
     }
   }, 150);
@@ -222,6 +260,7 @@ export function startPlay(options: {
       destroyed = true;
       clearInterval(timer);
       keyboard.detach();
+      pad.detach();
       view?.destroy();
       view = null;
       canvas.replaceChildren();

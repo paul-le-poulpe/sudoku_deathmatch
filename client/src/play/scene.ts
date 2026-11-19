@@ -32,6 +32,34 @@ export const VIEW_W = BOARD_PX;
 const HUD_COLS = 2;
 const HUD_ROW = 58;
 
+/**
+ * Contenu d'une case du bandeau, en px de la vue (504 de large). Sur téléphone, la vue est réduite à la
+ * largeur de l'écran (71 % à 360 px, 77 % à 390) : le nom et les PV grossissent pour rester lisibles, et
+ * le nombre de cases remplies du joueur s'affiche à droite (le panneau des joueurs est en bas de la page).
+ * `pipX` : centre du premier rond depuis le bord gauche de la case ; `bonusGap` : écart de plus avant les
+ * losanges ; `tagGap` : du centre du dernier losange au mot « rattrapage ».
+ */
+interface HudLayout {
+  readonly nameX: number;
+  readonly nameY: number;
+  readonly nameSize: number;
+  readonly pipX: number;
+  readonly pipY: number;
+  readonly pipStep: number;
+  readonly pipR: number;
+  readonly bonusGap: number;
+  readonly tagGap: number;
+  readonly tagSize: number;
+  /** Taille du nombre de cases remplies ; 0 : pas de nombre. */
+  readonly countSize: number;
+}
+
+const HUD_DESK: HudLayout = { nameX: 14, nameY: 11, nameSize: 14, pipX: 22, pipY: 41, pipStep: 22, pipR: 7, bonusGap: 8, tagGap: 17, tagSize: 11, countSize: 0 };
+const HUD_PHONE: HudLayout = { nameX: 14, nameY: 9, nameSize: 17, pipX: 20, pipY: 43, pipStep: 17, pipR: 6, bonusGap: 6, tagGap: 14, tagSize: 13, countSize: 26 };
+/** Sur téléphone : le nombre de cases remplies finit à 16 px du bord droit de la case ; le nom s'arrête 52 px avant. */
+const COUNT_RIGHT = 16;
+const NAME_RIGHT = 52;
+
 export function hudHeight(players: number): number {
   return 6 + HUD_ROW * Math.max(1, Math.ceil(players / HUD_COLS));
 }
@@ -100,6 +128,12 @@ function hexOf(color: number): string {
   return `#${color.toString(16).padStart(6, "0")}`;
 }
 
+/** Écrit `label` dans `t`, raccourci et suivi de « … » tant qu'il dépasse `max` px de large. */
+function fitText(t: Phaser.GameObjects.Text, label: string, max: number): void {
+  t.setText(label);
+  for (let n = label.length - 1; n > 0 && t.width > max; n--) t.setText(`${label.slice(0, n).trimEnd()}…`);
+}
+
 /** Cadre de la mine : carré de 32 px au centre de la case (12 px du bord), trait de 2,5 px vers l'intérieur. */
 const MINE_FRAME = 32;
 /** Opacité du cadre à pointes d'une mine en recharge (03-Pieges §2, essai de l'auteur : 35 %). */
@@ -164,7 +198,11 @@ export interface GameView {
   destroy(): void;
 }
 
-export async function createGameView(parent: HTMLElement, session: PlaySession, dir: () => number): Promise<GameView> {
+/**
+ * `dir` : direction du clavier et de la croix tactile ; `phone` : écran de téléphone (bandeau HUD_PHONE),
+ * relu à chaque image.
+ */
+export async function createGameView(parent: HTMLElement, session: PlaySession, dir: () => number, phone: () => boolean): Promise<GameView> {
   const P = (await import("phaser")) as unknown as typeof Phaser;
   await document.fonts.ready;
 
@@ -195,7 +233,10 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     readonly cellTexts: Phaser.GameObjects.Text[] = [];
     readonly cellCache: string[] = [];
     readonly nameTexts = new Map<number, Phaser.GameObjects.Text>();
+    /** Par joueur : nom, état et bandeau du dernier texte du nom écrit (il n'est réécrit que s'ils changent). */
+    readonly nameKeys = new Map<number, string>();
     readonly bonusTexts = new Map<number, Phaser.GameObjects.Text>();
+    readonly countTexts = new Map<number, Phaser.GameObjects.Text>();
     /** Par joueur : losanges affichés ou non, depuis quand, et ses PV au dernier dessin affiché. */
     readonly bonus = new Map<number, { shown: boolean; since: number; hp: number }>();
     readonly sprites = new Map<number, Phaser.GameObjects.Image>();
@@ -555,6 +596,7 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     drawHud(now: number, view: readonly ViewPlayer[]): void {
       const h = this.hud;
       h.clear();
+      const L = phone() ? HUD_PHONE : HUD_DESK;
       // Deux cases par ligne, dans l'ordre de la salle : les joueurs 3 et 4 sont sur la seconde.
       const slot = VIEW_W / Math.max(1, Math.min(HUD_COLS, view.length));
       view.forEach((p, k) => {
@@ -566,26 +608,27 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
         h.fillRoundedRect(x0 + 4, y0 + 6, slot - 8, HUD_ROW - 8, 10);
         h.lineStyle(p.you ? 2 : 1, p.you ? hexToInt(c.color) : LINE, alpha);
         h.strokeRoundedRect(x0 + 4, y0 + 6, slot - 8, HUD_ROW - 8, 10);
-        // Pastilles des PV (00-Game §1) : 4 ronds ; en retard, 2 losanges 8 px plus loin, puis « rattrapage ».
-        // Pleines de gauche à droite : un joueur en retard perd d'abord les losanges.
+        // Pastilles des PV (00-Game §1) : 4 ronds ; en retard, 2 losanges un peu plus loin, puis
+        // « rattrapage ». Pleines de gauche à droite : un joueur en retard perd d'abord les losanges.
         const color = hexToInt(c.color);
-        const cy = y0 + 41;
+        const cy = y0 + L.pipY;
         for (let k2 = 0; k2 < START_HP; k2++) {
-          const cx = x0 + 22 + k2 * 22;
+          const cx = x0 + L.pipX + k2 * L.pipStep;
           if (k2 < p.hp) {
             h.fillStyle(color, alpha);
-            h.fillCircle(cx, cy, 7);
+            h.fillCircle(cx, cy, L.pipR);
           } else {
             h.lineStyle(2, EMPTY_PIP, alpha);
-            h.strokeCircle(cx, cy, 7);
+            h.strokeCircle(cx, cy, L.pipR);
           }
         }
         const bonus = this.bonusLook(now, p);
+        const lastBonus = x0 + L.pipX + L.bonusGap + (START_HP + CATCH_UP_HP - 1) * L.pipStep;
         if (bonus.scale > 0) {
           for (let k2 = START_HP; k2 < START_HP + CATCH_UP_HP; k2++) {
-            const cx = x0 + 30 + k2 * 22;
-            // Demi-diagonale de 7 px : un carré de 10 px tourné de 45°.
-            const d = 7 * bonus.scale;
+            const cx = x0 + L.pipX + L.bonusGap + k2 * L.pipStep;
+            // Demi-diagonale du rayon d'un rond : sur ordinateur, un carré de 10 px tourné de 45°.
+            const d = L.pipR * bonus.scale;
             h.beginPath();
             h.moveTo(cx, cy - d);
             h.lineTo(cx + d, cy);
@@ -607,15 +650,33 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
           tag.setOrigin(0, 0.5);
           this.bonusTexts.set(p.id, tag);
         }
-        tag.setPosition(x0 + 30 + (START_HP + CATCH_UP_HP - 1) * 22 + 17, cy).setAlpha(alpha * bonus.label).setVisible(bonus.label > 0);
+        if (tag.style.fontSize !== `${L.tagSize}px`) tag.setFontSize(L.tagSize);
+        tag.setPosition(lastBonus + L.tagGap, cy).setAlpha(alpha * bonus.label).setVisible(bonus.label > 0);
         let name = this.nameTexts.get(p.id);
         if (name === undefined) {
-          name = this.add.text(x0 + 14, y0 + 11, "", { fontFamily: "Inter, sans-serif", fontSize: "14px", color: c.ink, fontStyle: "600" });
+          name = this.add.text(0, 0, "", { fontFamily: "Inter, sans-serif", fontSize: "14px", color: c.ink, fontStyle: "600" });
           this.nameTexts.set(p.id, name);
         }
         const label = p.alive ? p.name : `${p.name} · éliminé`;
-        if (name.text !== label) name.setText(label);
-        name.setPosition(x0 + 14, y0 + 11).setAlpha(alpha);
+        const key = `${label}|${L.nameSize}|${slot}`;
+        if (this.nameKeys.get(p.id) !== key) {
+          this.nameKeys.set(p.id, key);
+          name.setFontSize(L.nameSize);
+          // Sur téléphone, le nom s'arrête avant le nombre de cases : raccourci, avec « … ».
+          fitText(name, label, L.countSize > 0 ? slot - L.nameX - NAME_RIGHT : Infinity);
+        }
+        name.setPosition(x0 + L.nameX, y0 + L.nameY).setAlpha(alpha);
+        let count = this.countTexts.get(p.id);
+        if (count === undefined) {
+          count = this.add.text(0, 0, "", { fontFamily: "'Space Grotesk', Inter, sans-serif", fontSize: "26px", color: c.ink, fontStyle: "700" });
+          count.setOrigin(1, 0.5);
+          this.countTexts.set(p.id, count);
+        }
+        count.setVisible(L.countSize > 0);
+        if (L.countSize > 0) {
+          if (count.text !== String(p.score)) count.setText(String(p.score));
+          count.setPosition(x0 + slot - COUNT_RIGHT, y0 + 6 + (HUD_ROW - 8) / 2).setAlpha(alpha);
+        }
       });
     }
 
@@ -704,7 +765,9 @@ export async function createGameView(parent: HTMLElement, session: PlaySession, 
     height: viewHeight(session.players.length),
     backgroundColor: "#F5F5F4",
     banner: false,
-    input: { keyboard: false },
+    // Phaser ne lit ni le clavier, ni la souris, ni le toucher (keyboard.ts, touchpad.ts) : sans cela, il
+    // bloquerait le défilement de la page quand le doigt est sur la grille.
+    input: { keyboard: false, mouse: false, touch: false, gamepad: false },
     scene: BoardScene,
   });
   return { destroy: () => game.destroy(true) };
