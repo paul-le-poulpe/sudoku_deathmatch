@@ -41,11 +41,25 @@ const SUBTITLES: Readonly<Record<Screen, string>> = {
   game: "Partie en cours",
 };
 
+// Au rechargement, le navigateur ne remet pas la page à sa position d'avant : elle s'ouvre en haut.
+history.scrollRestoration = "manual";
+
+let shown: Screen | null = null;
+
+/**
+ * Montre un écran. Un autre écran que celui affiché, ou une partie qui commence (`start`, relance
+ * comprise), s'ouvre en haut de la page : sans cela, la page garde la position de l'écran d'avant (par
+ * exemple la salle d'attente défilée jusqu'à « Lancer la partie »), et sur téléphone le haut de la partie
+ * est hors de l'écran. Les messages `room`, qui réaffichent la salle à chaque changement, ne font pas
+ * défiler.
+ */
 function show(screen: Screen): void {
   for (const s of ["home", "create", "join", "room", "game"] as const) $(`screen-${s}`).hidden = s !== screen;
   $("subtitle").textContent = SUBTITLES[screen];
   // Lu par style.css : sur téléphone, l'en-tête disparaît pendant une partie.
   document.body.dataset.screen = screen;
+  if (screen !== shown || screen === "game") window.scrollTo(0, 0);
+  shown = screen;
 }
 
 function notice(text: string | null): void {

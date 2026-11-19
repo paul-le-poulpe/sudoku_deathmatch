@@ -116,16 +116,18 @@ Décidé par l'auteur le 15 novembre 2026.
 - **Écran de jeu sur téléphone** (décidé le 19 novembre 2026 : variante C de
   la maquette « Sudoku Deathmatch — téléphone »,
   https://claude.ai/artifact/5VWGTbwfkeJNXzF7nmNntm, sans son bandeau du
-  haut). Avant, sur un téléphone, la grille dépassait de l'écran à droite.
-  Pendant une partie, sur un écran étroit :
+  haut ; croix et pièges échangés le même jour). Avant, sur un téléphone, la
+  grille dépassait de l'écran à droite. Pendant une partie, sur un écran
+  étroit :
+  - la partie s'ouvre en haut de la page, à chaque lancement ;
   - pas d'en-tête (logo, nom du jeu, « Partie en cours ») ;
   - en haut, les boîtes des joueurs en 2 × 2, plus petites, avec à droite le
     nombre de cases remplies par chacun ;
   - la grille, de la largeur de l'écran ;
-  - dessous, sur une ligne : à gauche une croix d'une seule pièce pour se
-    déplacer, au milieu les chiffres en pavé 3 × 3 (1 2 3 en haut), à droite
-    les trois boutons des pièges empilés, sans la lettre de leur touche, avec
-    « ×2 » en pastille sur le coin de l'icône ;
+  - dessous, sur une ligne : à gauche les trois boutons des pièges empilés,
+    sans la lettre de leur touche, avec « ×2 » en pastille sur le coin de
+    l'icône ; au milieu les chiffres en pavé 3 × 3 (1 2 3 en haut) ; à droite
+    une croix d'une seule pièce pour se déplacer ;
   - en bas de la page, en faisant défiler : le panneau des joueurs (qui montre
     le classement de fin), puis le bouton Quitter. Le niveau et les cases à
     remplir n'apparaissent que dans ce panneau. Le fond sombre de la fin dit

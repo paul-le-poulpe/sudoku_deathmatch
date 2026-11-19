@@ -960,9 +960,10 @@ p {
 
 /*
  * Écran de téléphone (00-Game §1, Écran de jeu sur téléphone ; variante C de la maquette « Sudoku
- * Deathmatch — téléphone », sans son bandeau du haut). Même seuil que PHONE_QUERY (screen.ts). Pendant une
- * partie, pas d'en-tête ni de marges : la grille prend la largeur de l'écran, et dessous, sur une ligne, la
- * croix, le pavé des chiffres et les pièges. Le panneau des joueurs et Quitter sont en bas de la page.
+ * Deathmatch — téléphone », sans son bandeau du haut, croix et pièges échangés). Même seuil que PHONE_QUERY
+ * (screen.ts). Pendant une partie, pas d'en-tête ni de marges : la grille prend la largeur de l'écran, et
+ * dessous, sur une ligne, les pièges, le pavé des chiffres et la croix. Le panneau des joueurs et Quitter
+ * sont en bas de la page.
  * --k : côté d'une touche du pavé, d'un bouton de piège en hauteur et d'une branche de la croix (38 px à
  * 360 px de large, 41 à 390, 44 au plus).
  */
@@ -1063,8 +1064,18 @@ p {
     -webkit-touch-callout: none;
   }
 
+  /* De gauche à droite : pièges, chiffres, croix (l'ordre du HTML est celui de l'ordinateur). */
+  .game-controls .traps {
+    order: 1;
+  }
+
+  .game-controls .digits {
+    order: 2;
+  }
+
   /* Sur la croix, le doigt ne fait pas défiler la page. */
   .cross {
+    order: 3;
     display: block;
     flex: none;
     width: calc(3 * var(--k));

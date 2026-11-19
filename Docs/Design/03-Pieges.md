@@ -22,7 +22,7 @@ Décidé par l'auteur le 15 novembre 2026.
 
 - **« Piège » est le mot générique** : les tourelles sont des pièges.
 - **Poser.** Sous les boutons des chiffres, une ligne montre tous les pièges
-  disponibles (sur téléphone, empilés à droite du pavé des chiffres :
+  disponibles (sur téléphone, empilés à gauche du pavé des chiffres :
   `00-Game.md` §1, Écran de jeu sur téléphone). Un clic sur l'un d'eux le
   pose sur la case où se trouve le bonhomme, à deux conditions : la case a été remplie par ce joueur (son
   chiffre est de sa couleur), et elle n'a pas encore de piège.

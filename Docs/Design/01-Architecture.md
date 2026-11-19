@@ -763,14 +763,22 @@ Pièges et projectiles), et les réglages des pièges (`03-Pieges.md`).
   constante du module. Sur téléphone, mêmes cases de 58 px, contenu
   `HUD_PHONE` (nom de 17 px, raccourci avec « … » avant le nombre de cases
   remplies, de 26 px).
+- **Défilement** (`show` de `main.ts`) : un autre écran que celui affiché, et
+  chaque `start` (relance comprise), remet la page en haut ; les messages
+  `room`, qui réaffichent la salle à chaque changement, non.
+  `history.scrollRestoration = "manual"` : au rechargement, la page s'ouvre en
+  haut. Sans cela, la partie gardait la position de la salle d'attente, et sur
+  téléphone le haut de la partie était hors de l'écran.
 - **Écran de téléphone** (`style.css`, `@media (max-width: 699px)` ;
   `PHONE_QUERY` dans `screen.ts`, même seuil, relu à chaque image par
   `drawHud`). La vue Phaser reste de 504 px de large : son canvas est étiré à
   la largeur de `.game-canvas` (71 % à 360 px). La largeur de la grille est le
   plus petit de la largeur de l'écran et de `(100svh − 3 × --k − 22 px) × 504
   / --view-h`, `--k` étant le côté d'une touche (`min(44px, 10.5vw)`) : les
-  commandes restent visibles sur un écran court. `body[data-screen]`
-  (`show` de `main.ts`) retire l'en-tête pendant une partie. Phaser ne lit ni
+  commandes restent visibles sur un écran court. Pièges, chiffres puis croix
+  de gauche à droite par `order` (le HTML garde l'ordre de l'ordinateur).
+  `body[data-screen]` (`show` de `main.ts`) retire l'en-tête pendant une
+  partie. Phaser ne lit ni
   la souris ni le toucher (`input` de la configuration) : sinon il bloque le
   défilement de la page quand le doigt est sur la grille. Message :
   `#game-toast`, dans `.game-stage`, à la place de `#game-message`. Croix
